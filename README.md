@@ -17,3 +17,11 @@ SPEECH_REGION=...
 MASTER_PASSWORD=votrepswd
 ```
 
+Installez les requirements, dans un environnement virtuel de préférence et pour lancer l'app: 
+
+```
+python app.py
+```
+
+
+

@@ -1,0 +1,7 @@
+Flask==3.1.2
+Flask-SocketIO==5.5.1
+azure-cognitiveservices-speech==1.47.0
+scipy==1.16.3
+azure-core==1.36.0
+azure-identity==1.25.1
+
