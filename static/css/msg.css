@@ -1,0 +1,133 @@
+/* static/css/msg.css */
+/* Styles communs */
+body {
+    background-color: #131313;
+    color: #fff;
+    font-family: Aptos, Calibri, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-weight: 300;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    height: 100vh;
+}
+
+.container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    height: calc(100vh - 100px);
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.column {
+    padding: 20px;
+    display: flex;
+    flex-direction: column-reverse;
+}
+
+.fr-col { 
+    border-right: 1px solid #333; 
+}
+
+.es-col {
+    color: #ffbf00;
+}
+
+.msg {
+    font-size: 2em;
+    line-height: 1.2;
+    margin-bottom: 15px;
+}
+
+.temp { 
+    opacity: 0.6; 
+    font-style: italic; 
+}
+
+.controls {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #000;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+    /* border-top: 1px solid #333; */
+    height: 100px;
+    box-sizing: border-box;
+}
+
+.controls button {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: none;
+    background: #333;
+    color: white;
+    font-size: 1.5em;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.controls button:hover:not(:disabled) {
+    background: #555;
+    transform: scale(1.1);
+}
+
+.controls button:active:not(:disabled) {
+    transform: scale(0.95);
+}
+
+.controls button:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.controls button#btnStart:not(:disabled) {
+    background: #00bfff;
+}
+
+.controls button#btnStart:not(:disabled):hover {
+    background: #0099cc;
+}
+
+.controls button#btnStop:not(:disabled) {
+    background: #ff4444;
+}
+
+.controls button#btnStop:not(:disabled):hover {
+    background: #cc0000;
+}
+
+/* Styles pour viewer.html */
+.mobile-controls {
+    display: none;
+    position: fixed; top: 0; left: 0; right: 0;
+    background: #222; padding: 10px; text-align: center;
+    z-index: 100;
+}
+
+.mobile-btn {
+    background: #444; color: white; border: none; padding: 8px 16px;
+    margin: 0 5px; border-radius: 20px;
+}
+
+.mobile-btn.active { background: #0078d4; }
+
+/* Mobile CSS */
+@media (max-width: 768px) {
+    .mobile-controls { display: block; }
+    .container {
+        grid-template-columns: 1fr;
+        padding-top: 60px;
+    }
+    .fr-col { border-right: none; }
+    .msg { font-size: 1em; }
+    .hidden { display: none !important; }
+}

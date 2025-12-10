@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Traduction</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/msg.css') }}">
+</head>
+<body>
+
+    <div class="mobile-controls">
+        <button class="mobile-btn active" onclick="showLang('fr')" id="btn-fr">Français 🇫🇷</button>
+        <button class="mobile-btn" onclick="showLang('es')" id="btn-es">Español 🇲🇽</button>
+    </div>
+
+    <div class="container">
+        <div id="col-fr" class="column fr-col">
+            </div>
+        <div id="col-es" class="column es-col">
+            </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const colFr = document.getElementById('col-fr');
+        const colEs = document.getElementById('col-es');
+
+        // Gestion Mobile
+        let currentMobileLang = 'fr';
+        // Au chargement sur mobile, on cache l'espagnol par défaut
+        if (window.innerWidth <= 768) {
+            document.getElementById('col-es').classList.add('hidden');
+        }
+
+        function showLang(lang) {
+            currentMobileLang = lang;
+            document.getElementById('btn-fr').className = lang === 'fr' ? 'mobile-btn active' : 'mobile-btn';
+            document.getElementById('btn-es').className = lang === 'es' ? 'mobile-btn active' : 'mobile-btn';
+            
+            if (lang === 'fr') {
+                colFr.classList.remove('hidden');
+                colEs.classList.add('hidden');
+            } else {
+                colFr.classList.add('hidden');
+                colEs.classList.remove('hidden');
+            }
+        }
+
+        // Gestion WebSocket
+        socket.on('load_history', (history) => {
+            history.forEach(data => addMessage(data));
+        });
+
+        socket.on('display_message', (data) => {
+            addMessage(data);
+        });
+
+        socket.on('clear_screen', () => {
+            colFr.innerHTML = '';
+            colEs.innerHTML = '';
+        });
+
+        function addMessage(data) {
+            // Suppression des messages temporaires précédents
+            document.querySelectorAll('.temp').forEach(e => e.remove());
+
+            // Création du HTML
+            const divFr = document.createElement('div');
+            const divEs = document.createElement('div');
+            
+            divFr.className = data.is_final ? 'msg' : 'msg temp';
+            divEs.className = data.is_final ? 'msg' : 'msg temp';
+
+            divFr.innerText = data.fr;
+            divEs.innerText = data.es;
+
+            // Ajout en bas (car flex-direction: column-reverse gère l'affichage)
+            colFr.prepend(divFr);
+            colEs.prepend(divEs);
+        }
+    </script>
+</body>
+</html>

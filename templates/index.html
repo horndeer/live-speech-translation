@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Traduction Live - Accueil</title>
+    <style>
+        body {
+            background-color: #000;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+
+        h1 {
+            font-weight: 300;
+            margin-bottom: 40px;
+            letter-spacing: 2px;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            width: 90%;
+            max-width: 400px;
+        }
+
+        /* Le gros bouton pour les invités */
+        .btn-viewer {
+            display: block;
+            padding: 25px;
+            background: linear-gradient(135deg, #0078d4 0%, #005a9e 100%);
+            color: white;
+            text-decoration: none;
+            font-size: 1.5em;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0, 120, 212, 0.4);
+            transition: transform 0.2s;
+        }
+
+        .btn-viewer:active {
+            transform: scale(0.98);
+        }
+
+        .sub-text {
+            font-size: 0.9em;
+            opacity: 0.8;
+            display: block;
+            margin-top: 5px;
+        }
+
+        /* Le bouton discret pour l'admin */
+        .btn-master {
+            margin-top: 30px;
+            background: none;
+            border: 1px solid #333;
+            color: #666;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.3s;
+        }
+
+        .btn-master:hover {
+            border-color: #666;
+            color: #aaa;
+        }
+
+    </style>
+</head>
+<body>
+
+    <h1>🎙️ WEDDING LIVE</h1>
+
+    <div class="container">
+        <a href="/viewer" class="btn-viewer">
+            <div>Regarder la traduction</div>
+            <span class="sub-text">Ver la traducción en vivo</span>
+        </a>
+
+        <div>
+            <button onclick="goToMaster()" class="btn-master">
+                🔧 Espace Technique / Micro
+            </button>
+        </div>
+    </div>
+
+    <script>
+        function goToMaster() {
+            // Demande le mot de passe défini dans le .env (par défaut "mariage2025")
+            // Si c'est vide, on ne fait rien
+            const pwd = prompt("Mot de passe Orateur (Admin) :");
+            
+            if (pwd) {
+                // Redirection vers la route sécurisée
+                window.location.href = `/master?pwd=${pwd}`;
+            }
+        }
+    </script>
+</body>
+</html>

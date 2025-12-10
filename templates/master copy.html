@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Master - Traduction</title>
+    <script src="https://cdn.jsdelivr.net/npm/microsoft-cognitiveservices-speech-sdk@latest/distrib/browser/microsoft.cognitiveservices.speech.sdk.bundle-min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body { background: #111; color: white; font-family: sans-serif; padding: 20px; }
+        .controls { margin-bottom: 20px; padding: 10px; background: #222; border-radius: 8px;}
+        button { padding: 10px 20px; font-size: 1.2em; cursor: pointer; }
+        .status { color: #aaa; margin-left: 10px; }
+        #live-preview { border-top: 1px solid #444; margin-top: 20px; padding-top: 10px; }
+        .log-item { display: flex; gap: 20px; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 5px; }
+        .col { flex: 1; }
+        .es { color: #ffbf00; } /* Jaune pour espagnol */
+        .fr { color: #00bfff; } /* Bleu pour français */
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <h2>🎛️ Contrôle Maître</h2>
+        <button id="btnStart" onclick="startRecognition()">▶️ Démarrer</button>
+        <button id="btnStop" onclick="stopRecognition()" disabled>⏸️ Pause</button>
+        <span id="status" class="status">Prêt</span>
+    </div>
+
+    <div id="live-preview">
+        </div>
+
+    <script>
+        // Récupération des clés injectées par Python (sécurisé car rendu côté serveur)
+        const speechKey = "{{ speech_key }}";
+        const serviceRegion = "{{ speech_region }}";
+
+        const socket = io();
+        let recognizer;
+
+        // --- Configuration Azure ---
+        function startRecognition() {
+            const speechConfig = SpeechSDK.SpeechTranslationConfig.fromSubscription(speechKey, serviceRegion);
+            
+            // Configuration langues (Source auto: FR ou ES) -> Cibles: FR et ES
+            // speechConfig.speechRecognitionLanguage = "fr-FR"; // Valeur par défaut
+            
+            // Astuce: AutoDetect en JS est un peu différent, pour simplifier 
+            // on configure souvent une langue principale, ou on utilise AutoDetectSourceLanguageConfig
+            // Pour ce script web JS, l'autodetect est plus complexe à setup que le Python.
+            // SIMPLIFICATION POUR LE TEST : On demande de traduire vers l'autre langue.
+            // Si vous voulez l'autodetect strict comme en python, il faut un setup spécifique.
+            // Ici, je configure pour traduire FR -> ES et ES -> FR (Bidirectionnel simulé via config)
+            
+            // Étape A : On définit une langue par défaut OBLIGATOIRE pour éviter l'erreur "NullOrUndefined"
+            // (Le SDK refuse de démarrer sans ça, même si on veut de l'auto-detect)
+            speechConfig.speechRecognitionLanguage = "fr-FR"; 
+
+            // Étape B : On configure les cibles
+            speechConfig.addTargetLanguage("fr");
+            speechConfig.addTargetLanguage("es");
+
+            // Étape C : On active l'autodétection via la "Property" interne
+            // Cela va SURCHARGER la langue définie à l'étape A une fois la requête envoyée à Azure
+            speechConfig.setProperty(
+                SpeechSDK.PropertyId.SpeechServiceConnection_AutoDetectSourceLanguages, 
+                "fr-FR,es-MX"
+            );
+
+            const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
+            recognizer = new SpeechSDK.TranslationRecognizer(speechConfig, audioConfig);
+            
+            function getDetectedLanguage(result) {
+                // On essaie de lire la propriété spéciale renvoyée par Azure
+                const autoDetectProp = result.properties.getProperty(SpeechSDK.PropertyId.SpeechServiceConnection_AutoDetectSourceLanguageResult);
+                
+                // Si Azure a trouvé, on renvoie ça, sinon on renvoie la langue du résultat standard
+                return autoDetectProp || result.language || "fr-FR";
+            }
+            // --- Événements ---
+
+            // 1. En cours de parole (Interim)
+            recognizer.recognizing = (s, e) => {
+                // On détecte la langue
+                let lang = getDetectedLanguage(e.result); // ex: fr-FR
+                let text = e.result.text;
+                let translations = e.result.translations;
+
+                console.log("Langue détectée:", lang);
+                console.log("Texte:", text);
+                console.log("Traductions:", translations);
+
+                // Logique de filtrage (similaire au Python)
+                let textFR = "", textES = "";
+                
+                if (lang.includes("fr")) {
+                    textFR = text;
+                    textES = translations.get("es");
+                } else if (lang.includes("es")) {
+                    textES = text;
+                    textFR = translations.get("fr");
+                }
+
+                // Envoi au serveur (Mode temporaire)
+                socket.emit('new_translation', {
+                    fr: textFR,
+                    es: textES,
+                    is_final: false
+                });
+            };
+
+            // 2. Phrase terminée (Final)
+            recognizer.recognized = (s, e) => {
+                if (e.result.reason == SpeechSDK.ResultReason.TranslatedSpeech) {
+                    let lang = getDetectedLanguage(e.result);
+                    let text = e.result.text;
+                    let translations = e.result.translations;
+
+                    console.log("Langue détectée:", lang);
+                    console.log("Texte:", text);
+                    console.log("Traductions:", translations);
+
+                    let textFR = "", textES = "";
+                    if (lang.includes("fr")) {
+                        textFR = text;
+                        textES = translations.get("es");
+                    } else if (lang.includes("es")) {
+                        textES = text;
+                        textFR = translations.get("fr");
+                    }
+
+                    // Envoi au serveur (Mode Final - Sera sauvegardé)
+                    socket.emit('new_translation', {
+                        fr: textFR,
+                        es: textES,
+                        is_final: true
+                    });
+                }
+            };
+
+            recognizer.canceled = (s, e) => {
+                console.error(`CANCELED: Reason=${e.reason}`);
+                if (e.reason === SpeechSDK.CancellationReason.Error) {
+                    console.error(`CANCELED: ErrorCode=${e.errorCode}`);
+                    console.error(`CANCELED: ErrorDetails=${e.errorDetails}`);
+                    console.error("CANCELED: Avez-vous mis à jour la clé d'abonnement et la région ?");
+                }
+            };
+
+            recognizer.startContinuousRecognitionAsync();
+            
+            document.getElementById('btnStart').disabled = true;
+            document.getElementById('btnStop').disabled = false;
+            document.getElementById('status').innerText = "🔴 En direct - Écoute...";
+
+            console.log("Démarrage de la reconnaissance...");
+        }
+
+        function stopRecognition() {
+            recognizer.stopContinuousRecognitionAsync();
+            document.getElementById('btnStart').disabled = false;
+            document.getElementById('btnStop').disabled = true;
+            document.getElementById('status').innerText = "⏸️ Pause";
+
+            console.log("Arrêt de la reconnaissance...");
+        }
+
+        // --- Réception Socket (Pour voir ce que voient les autres) ---
+        const container = document.getElementById('live-preview');
+
+        
+        
+        socket.on('display_message', (data) => {
+            // Si c'est un message final, on l'ajoute. 
+            // Si c'est "en cours", on met à jour une div temporaire (à implémenter pour perfectionner)
+            // Pour ce test simple, on affiche tout.
+            
+            // Nettoyage des messages "en cours" précédents si besoin
+            let temp = document.getElementById('temp-msg');
+            if(temp) temp.remove();
+
+            if (data.is_final) {
+                let div = document.createElement('div');
+                div.className = 'log-item';
+                div.innerHTML = `<div class="col fr">${data.fr}</div><div class="col es">${data.es}</div>`;
+                container.prepend(div); // Les plus récents en haut
+            } else {
+                let div = document.createElement('div');
+                div.id = 'temp-msg';
+                div.className = 'log-item';
+                div.style.opacity = "0.7";
+                div.innerHTML = `<div class="col fr">${data.fr}</div><div class="col es">${data.es}</div>`;
+                container.prepend(div);
+            }
+        });
+    </script>
+</body>
+</html>

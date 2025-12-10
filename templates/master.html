@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Master - Traduction</title>
+    <script src="https://cdn.jsdelivr.net/npm/microsoft-cognitiveservices-speech-sdk@latest/distrib/browser/microsoft.cognitiveservices.speech.sdk.bundle-min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/msg.css') }}">
+</head>
+<body>
+
+    <div class="container">
+        <div id="col-fr" class="column fr-col">
+        </div>
+        <div id="col-es" class="column es-col">
+        </div>
+    </div>
+
+    <div class="controls">
+        <button id="btnStart" onclick="startRecognition()">▶</button>
+        <button id="btnStop" onclick="stopRecognition()" disabled>⏸</button>
+    </div>
+
+
+    <script>
+        // Récupération des clés injectées par Python (sécurisé car rendu côté serveur)
+        const speechKey = "{{ speech_key }}";
+        const serviceRegion = "{{ speech_region }}";
+
+        const socket = io();
+        let recognizer;
+
+        // --- Configuration Azure ---
+        function startRecognition() {
+            const speechConfig = SpeechSDK.SpeechTranslationConfig.fromSubscription(speechKey, serviceRegion);
+
+            // init de langue source pour debugger le sdk
+            speechConfig.speechRecognitionLanguage = "fr-FR"; 
+
+            // init de langues cibles
+            speechConfig.addTargetLanguage("fr");
+            speechConfig.addTargetLanguage("es");
+
+            // + On active l'autodétection via la "Property" interne
+            // Cela va SURCHARGER la langue définie à l'étape A une fois la requête envoyée à Azure
+            speechConfig.setProperty(
+                SpeechSDK.PropertyId.SpeechServiceConnection_AutoDetectSourceLanguages, 
+                "fr-FR,es-MX"
+            );
+
+            const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
+            recognizer = new SpeechSDK.TranslationRecognizer(speechConfig, audioConfig);
+            
+            function getDetectedLanguage(result) {
+                // On essaie de lire la propriété spéciale renvoyée par Azure
+                const autoDetectProp = result.properties.getProperty(SpeechSDK.PropertyId.SpeechServiceConnection_AutoDetectSourceLanguageResult);
+                
+                // Si Azure a trouvé, on renvoie ça, sinon on renvoie la langue du résultat standard
+                return autoDetectProp || result.language || "fr-FR";
+            }
+            // --- Événements ---
+
+            // 1. En cours de parole (Interim)
+            recognizer.recognizing = (s, e) => {
+                // On détecte la langue
+                let lang = getDetectedLanguage(e.result); // ex: fr-FR
+                let text = e.result.text;
+                let translations = e.result.translations;
+
+                console.log("Langue détectée:", lang);
+                console.log("Texte:", text);
+                console.log("Traductions:", translations);
+
+                // Logique de filtrage (similaire au Python)
+                let textFR = "", textES = "", langsource = "";
+                
+                
+                if (lang.includes("fr")) {
+                    textFR = text;
+                    textES = translations.get("es");
+                    langsource = "fr";
+                } else if (lang.includes("es")) {
+                    textES = text;
+                    textFR = translations.get("fr");
+                    langsource = "es";
+                }
+
+                
+
+                // Envoi au serveur (Mode temporaire)
+                socket.emit('new_translation', {
+                    fr: textFR,
+                    es: textES,
+                    langsource: langsource,
+                    is_final: false,
+                });
+            };
+
+            // 2. Phrase terminée (Final)
+            recognizer.recognized = (s, e) => {
+                if (e.result.reason == SpeechSDK.ResultReason.TranslatedSpeech) {
+                    let lang = getDetectedLanguage(e.result);
+                    let text = e.result.text;
+                    let translations = e.result.translations;
+
+                    console.log("Langue détectée:", lang);
+                    console.log("Texte:", text);
+                    console.log("Traductions:", translations);
+
+                    let textFR = "", textES = "";
+                    if (lang.includes("fr")) {
+                        textFR = text;
+                        textES = translations.get("es");
+                    } else if (lang.includes("es")) {
+                        textES = text;
+                        textFR = translations.get("fr");
+                    }
+
+                    // Envoi au serveur (Mode Final - Sera sauvegardé)
+                    socket.emit('new_translation', {
+                        fr: textFR,
+                        es: textES,
+                        is_final: true
+                    });
+                }
+            };
+
+            recognizer.canceled = (s, e) => {
+                console.error(`CANCELED: Reason=${e.reason}`);
+                if (e.reason === SpeechSDK.CancellationReason.Error) {
+                    console.error(`CANCELED: ErrorCode=${e.errorCode}`);
+                    console.error(`CANCELED: ErrorDetails=${e.errorDetails}`);
+                    console.error("CANCELED: Avez-vous mis à jour la clé d'abonnement et la région ?");
+                }
+            };
+
+            recognizer.startContinuousRecognitionAsync();
+            
+            document.getElementById('btnStart').disabled = true;
+            document.getElementById('btnStop').disabled = false;
+
+            console.log("Démarrage de la reconnaissance...");
+        }
+
+        function stopRecognition() {
+            recognizer.stopContinuousRecognitionAsync();
+            document.getElementById('btnStart').disabled = false;
+            document.getElementById('btnStop').disabled = true;
+
+            console.log("Arrêt de la reconnaissance...");
+        }
+
+        // --- Réception Socket (Pour voir ce que voient les autres) ---
+        const colFr = document.getElementById('col-fr');
+        const colEs = document.getElementById('col-es');
+
+
+        socket.on('load_history', (history) => {
+            console.log("Chargement de l'historique..." + JSON.stringify(history));
+            history.forEach(data => addMessage(data));
+        });
+
+        socket.on('display_message', (data) => {
+            console.log("Affichage du message..." + JSON.stringify(data));
+            addMessage(data);
+        });
+
+        socket.on('clear_screen', () => {
+            colFr.innerHTML = '';
+            colEs.innerHTML = '';
+        });
+
+        function addMessage(data) {
+            // Suppression des messages temporaires précédents
+            document.querySelectorAll('.temp').forEach(e => e.remove());
+
+            // Création du HTML
+            const divFr = document.createElement('div');
+            const divEs = document.createElement('div');
+            
+            divFr.className = data.is_final ? 'msg' : 'msg temp';
+            divEs.className = data.is_final ? 'msg' : 'msg temp';
+
+            divFr.innerText = data.fr;
+            divEs.innerText = data.es;
+
+            // Ajout en bas (car flex-direction: column-reverse gère l'affichage)
+            colFr.prepend(divFr);
+            colEs.prepend(divEs);
+        }
+
+    </script>
+
+</body>
+</html>
