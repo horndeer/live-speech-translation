@@ -5,7 +5,7 @@
     <title>Master - Traduction</title>
     <script src="https://cdn.jsdelivr.net/npm/microsoft-cognitiveservices-speech-sdk@latest/distrib/browser/microsoft.cognitiveservices.speech.sdk.bundle-min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/msg.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/msg.css') }}">
 </head>
 <body>
 
@@ -23,16 +23,45 @@
 
 
     <script>
-        // Récupération des clés injectées par Python (sécurisé car rendu côté serveur)
-        const speechKey = "{{ speech_key }}";
-        const serviceRegion = "{{ speech_region }}";
+
+        const DEV_MODE = "{{ DEV_MODE|tojson }}";
 
         const socket = io();
         let recognizer;
 
+        async function getTokenOrRefresh() {
+            try {
+                const response = await fetch('/api/get-token');
+                
+                const data = await response.json();
+        
+                if (!response.ok) {
+                    const errorMessage = data.error || "Erreur inconnue lors de la récupération du token";
+                    throw new Error(errorMessage);
+                }   
+        
+                return {
+                    token: data.token,
+                    region: data.region
+                };
+        
+            } catch (error) {
+                if (DEV_MODE) console.error("Erreur Critique Authentication:", error.message);
+                alert("Impossible de se connecter au service vocal");
+                return null;
+            }
+        }
+
         // --- Configuration Azure ---
-        function startRecognition() {
-            const speechConfig = SpeechSDK.SpeechTranslationConfig.fromSubscription(speechKey, serviceRegion);
+        async function startRecognition() {
+
+            const authdata = await getTokenOrRefresh();
+            if (!authdata) return;
+
+            const { token, region } = authdata;
+            console.log('authentification réussie pour la région : ' + region);
+
+            const speechConfig = SpeechSDK.SpeechTranslationConfig.fromAuthorizationToken(token, region);
 
             // init de langue source pour debugger le sdk
             speechConfig.speechRecognitionLanguage = "fr-FR"; 
@@ -49,57 +78,26 @@
             );
 
             const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
-            recognizer = new SpeechSDK.TranslationRecognizer(speechConfig, audioConfig);
-            
-            function getDetectedLanguage(result) {
-                // On essaie de lire la propriété spéciale renvoyée par Azure
-                const autoDetectProp = result.properties.getProperty(SpeechSDK.PropertyId.SpeechServiceConnection_AutoDetectSourceLanguageResult);
-                
-                // Si Azure a trouvé, on renvoie ça, sinon on renvoie la langue du résultat standard
-                return autoDetectProp || result.language || "fr-FR";
-            }
-            // --- Événements ---
 
-            // 1. En cours de parole (Interim)
-            recognizer.recognizing = (s, e) => {
-                // On détecte la langue
-                let lang = getDetectedLanguage(e.result); // ex: fr-FR
-                let text = e.result.text;
-                let translations = e.result.translations;
 
-                console.log("Langue détectée:", lang);
-                console.log("Texte:", text);
-                console.log("Traductions:", translations);
-
-                // Logique de filtrage (similaire au Python)
-                let textFR = "", textES = "", langsource = "";
+            try {
+                recognizer = new SpeechSDK.TranslationRecognizer(speechConfig, audioConfig);
                 
-                
-                if (lang.includes("fr")) {
-                    textFR = text;
-                    textES = translations.get("es");
-                    langsource = "fr";
-                } else if (lang.includes("es")) {
-                    textES = text;
-                    textFR = translations.get("fr");
-                    langsource = "es";
+                function getDetectedLanguage(result) {
+                    // On essaie de lire la propriété spéciale renvoyée par Azure
+                    const autoDetectProp = result.properties.getProperty(SpeechSDK.PropertyId.SpeechServiceConnection_AutoDetectSourceLanguageResult);
+                    
+                    // Si Azure a trouvé, on renvoie ça, sinon on renvoie la langue du résultat standard
+                    return autoDetectProp || result.language || "fr-FR";
                 }
+                // --- Événements ---
 
-                
+                // 1. En cours de parole (Interim)
+                recognizer.recognizing = (s, e) => {
 
-                // Envoi au serveur (Mode temporaire)
-                socket.emit('new_translation', {
-                    fr: textFR,
-                    es: textES,
-                    langsource: langsource,
-                    is_final: false,
-                });
-            };
-
-            // 2. Phrase terminée (Final)
-            recognizer.recognized = (s, e) => {
-                if (e.result.reason == SpeechSDK.ResultReason.TranslatedSpeech) {
-                    let lang = getDetectedLanguage(e.result);
+                    if (DEV_MODE) console.log("reconnaissance en cours de parole...");
+                    // On détecte la langue
+                    let lang = getDetectedLanguage(e.result); // ex: fr-FR
                     let text = e.result.text;
                     let translations = e.result.translations;
 
@@ -107,39 +105,94 @@
                     console.log("Texte:", text);
                     console.log("Traductions:", translations);
 
-                    let textFR = "", textES = "";
+                    // Logique de filtrage (similaire au Python)
+                    let textFR = "", textES = "", langsource = "";
+                    
                     if (lang.includes("fr")) {
                         textFR = text;
                         textES = translations.get("es");
+                        langsource = "fr";
                     } else if (lang.includes("es")) {
                         textES = text;
                         textFR = translations.get("fr");
+                        langsource = "es";
                     }
 
-                    // Envoi au serveur (Mode Final - Sera sauvegardé)
+                    // Envoi au serveur (Mode temporaire)
                     socket.emit('new_translation', {
                         fr: textFR,
                         es: textES,
-                        is_final: true
+                        langsource: langsource,
+                        is_final: false,
                     });
-                }
-            };
+                };
 
-            recognizer.canceled = (s, e) => {
-                console.error(`CANCELED: Reason=${e.reason}`);
-                if (e.reason === SpeechSDK.CancellationReason.Error) {
-                    console.error(`CANCELED: ErrorCode=${e.errorCode}`);
-                    console.error(`CANCELED: ErrorDetails=${e.errorDetails}`);
-                    console.error("CANCELED: Avez-vous mis à jour la clé d'abonnement et la région ?");
-                }
-            };
+                // 2. Phrase terminée (Final)
+                recognizer.recognized = (s, e) => {
+                    if (e.result.reason == SpeechSDK.ResultReason.TranslatedSpeech) {
+                        let lang = getDetectedLanguage(e.result);
+                        let text = e.result.text;
+                        let translations = e.result.translations;
 
-            recognizer.startContinuousRecognitionAsync();
+                        console.log("Langue détectée:", lang);
+                        console.log("Texte:", text);
+                        console.log("Traductions:", translations);
+
+                        let textFR = "", textES = "";
+                        if (lang.includes("fr")) {
+                            textFR = text;
+                            textES = translations.get("es");
+                        } else if (lang.includes("es")) {
+                            textES = text;
+                            textFR = translations.get("fr");
+                        }
+
+                        // Envoi au serveur (Mode Final - Sera sauvegardé)
+                        socket.emit('new_translation', {
+                            fr: textFR,
+                            es: textES,
+                            is_final: true
+                        });
+                    }
+                };
+
+                recognizer.canceled = (s, e) => {
+                    if (DEV_MODE) console.error(`CANCELED: Reason=${e.reason}`);
+                    if (e.reason === SpeechSDK.CancellationReason.Error) {
+                        if (DEV_MODE) console.error(`CANCELED: ErrorCode=${e.errorCode}`);
+                        if (DEV_MODE) console.error(`CANCELED: ErrorDetails=${e.errorDetails}`);
+                        if (DEV_MODE) console.error("CANCELED: Avez-vous mis à jour la clé d'abonnement et la région ?");
+                    }
+                };
+
+                recognizer.startContinuousRecognitionAsync();
+
+                // intervalle de renouvellement du token Azure (9 minutes)
+                tokenRefreshInterval = setInterval(async () => {
+                    console.log("🔄 Renouvellement du token Azure en cours...");
+                    
+                    const newData = await getTokenOrRefresh();
+                    
+                    if (newData && newData.token) {
+                        // C'est la méthode magique : on met à jour le token à la volée
+                        recognizer.authorizationToken = newData.token;
+                        console.log("Token renouvelé avec succès sans coupure !");
+                    } else {
+                        console.error("Échec du renouvellement du token");
+                    }
+                    
+                }, 9 * 60 * 1000); // 9 minutes * 60 secondes * 1000 ms
+
+            } catch (error) {
+                if (DEV_MODE) console.error("Erreur Critique de reconnaissance:", error.message);
+                alert("Impossible de démarrer la reconnaissance");
+                return;
+            }
             
             document.getElementById('btnStart').disabled = true;
             document.getElementById('btnStop').disabled = false;
 
-            console.log("Démarrage de la reconnaissance...");
+            console.log("reconnaissance démarrée");
         }
 
         function stopRecognition() {
@@ -147,7 +200,12 @@
             document.getElementById('btnStart').disabled = false;
             document.getElementById('btnStop').disabled = true;
 
-            console.log("Arrêt de la reconnaissance...");
+            if (tokenRefreshInterval) {
+                clearInterval(tokenRefreshInterval);
+                tokenRefreshInterval = null;
+            }
+
+            console.log("reconnaissance arrêtée");
         }
 
         // --- Réception Socket (Pour voir ce que voient les autres) ---
@@ -156,7 +214,7 @@
 
 
         socket.on('load_history', (history) => {
-            console.log("Chargement de l'historique..." + JSON.stringify(history));
+            if (DEV_MODE) console.log("Chargement de l'historique..." + JSON.stringify(history));
             history.forEach(data => addMessage(data));
         });
 

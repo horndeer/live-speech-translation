@@ -1,0 +1,40 @@
+name: Deploy to Google Cloud
+
+on:
+  push:
+    branches:
+      - main  # Ou 'master' selon votre branche principale
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          port: 22
+          script: |
+            # 1. Aller dans le dossier
+            cd ~/live-speech-translation
+                        
+            # 2. Récupérer le dernier code
+            git pull origin main
+
+            # 3. Mettre à jour les dépendances
+            source venv/bin/activate
+            # IMPORTANT : Assurez-vous que uvicorn[standard] est dans requirements.txt
+            pip install -r requirements.txt
+
+            # 4. Relancer le serveur avec PM2 et UVICORN
+            # On supprime l'ancien process s'il existe pour être propre
+            pm2 delete mon-app-traduction || true
+
+            # On lance Uvicorn directement.
+            # app:socket_app signifie : Fichier app.py, variable socket_app
+            pm2 start "uvicorn app:socket_app --host 0.0.0.0 --port 3000" --name mon-app-traduction
+
+            # 5. Sauvegarder la liste des process PM2 pour qu'ils redémarrent au reboot du serveur
+            pm2 save
