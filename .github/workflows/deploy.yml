@@ -25,4 +25,4 @@ jobs:
             git pull origin main
             source venv/bin/activate
             pip install -r requirements.txt
-            pm2 reload mon-app-traduction || pm2 restart mon-app-traduction
+            pm2 reload traduction-app || pm2 restart traduction-app
