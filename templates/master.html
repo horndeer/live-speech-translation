@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <title>Master - Traduction</title>
-    <script src="https://cdn.jsdelivr.net/npm/microsoft-cognitiveservices-speech-sdk@latest/distrib/browser/microsoft.cognitiveservices.speech.sdk.bundle-min.js"></script>
+    <script src="{{ url_for('static', path='js/vendor/microsoft.cognitiveservices.speech.sdk.bundle-min.js') }}"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <link rel="stylesheet" href="{{ url_for('static', path='css/msg.css') }}">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 <body>
 
@@ -24,10 +25,13 @@
 
     <script>
 
+        console.log("Version SDK Azure:", SpeechSDK.SpeechRecognizer.prototype ? "Chargé" : "Non chargé");
+
         const DEV_MODE = "{{ DEV_MODE|tojson }}";
 
         const socket = io();
-        let recognizer;
+
+        let recognizer = null;
 
         async function getTokenOrRefresh() {
             try {
@@ -61,34 +65,29 @@
             const { token, region } = authdata;
             console.log('authentification réussie pour la région : ' + region);
 
+            // 1. Config de base
             const speechConfig = SpeechSDK.SpeechTranslationConfig.fromAuthorizationToken(token, region);
 
-            // init de langue source pour debugger le sdk
-            speechConfig.speechRecognitionLanguage = "fr-FR"; 
-
-            // init de langues cibles
+            // 2. Cibles (Ce que vous voulez obtenir)
             speechConfig.addTargetLanguage("fr");
             speechConfig.addTargetLanguage("es");
 
-            // + On active l'autodétection via la "Property" interne
-            // Cela va SURCHARGER la langue définie à l'étape A une fois la requête envoyée à Azure
+            // --- L'ASTUCE EST ICI ---
+
+            speechConfig.speechRecognitionLanguage = "fr-FR";
+
             speechConfig.setProperty(
-                SpeechSDK.PropertyId.SpeechServiceConnection_AutoDetectSourceLanguages, 
-                "fr-FR,es-MX"
+                SpeechSDK.PropertyId.SpeechServiceConnection_AutoDetectSourceLanguages,
+                "fr-FR,es-MX" // Liste des candidats possibles
             );
 
             const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
-
 
             try {
                 recognizer = new SpeechSDK.TranslationRecognizer(speechConfig, audioConfig);
                 
                 function getDetectedLanguage(result) {
-                    // On essaie de lire la propriété spéciale renvoyée par Azure
-                    const autoDetectProp = result.properties.getProperty(SpeechSDK.PropertyId.SpeechServiceConnection_AutoDetectSourceLanguageResult);
-                    
-                    // Si Azure a trouvé, on renvoie ça, sinon on renvoie la langue du résultat standard
-                    return autoDetectProp || result.language || "fr-FR";
+                    return result.language;
                 }
                 // --- Événements ---
 
@@ -130,6 +129,8 @@
                 // 2. Phrase terminée (Final)
                 recognizer.recognized = (s, e) => {
                     if (e.result.reason == SpeechSDK.ResultReason.TranslatedSpeech) {
+                        if (DEV_MODE) console.log("phrase terminée reçus:");
+                        if (DEV_MODE) console.log(e.result);
                         let lang = getDetectedLanguage(e.result);
                         let text = e.result.text;
                         let translations = e.result.translations;

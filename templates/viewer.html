@@ -6,6 +6,7 @@
     <title>Live Traduction</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <link rel="stylesheet" href="{{ url_for('static', path='css/msg.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/msg-viewer.css') }}">
 </head>
 <body>
 
@@ -26,6 +27,7 @@
         const colFr = document.getElementById('col-fr');
         const colEs = document.getElementById('col-es');
 
+
         // Gestion Mobile
         let currentMobileLang = 'fr';
         // Au chargement sur mobile, on cache l'espagnol par défaut
@@ -45,7 +47,7 @@
                 colFr.classList.add('hidden');
                 colEs.classList.remove('hidden');
             }
-        }
+        } 
 
         // Gestion WebSocket
         socket.on('load_history', (history) => {
