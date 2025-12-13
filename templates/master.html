@@ -5,32 +5,33 @@
     <title>Master - Traduction</title>
     <script src="{{ url_for('static', path='js/vendor/microsoft.cognitiveservices.speech.sdk.bundle-min.js') }}"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-    <link rel="stylesheet" href="{{ url_for('static', path='css/msg.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/main.css') }}">
     <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 <body>
 
     <div class="container">
-        <div id="col-fr" class="column fr-col">
-        </div>
-        <div id="col-es" class="column es-col">
-        </div>
+        <div id="conversation" class="scroll-area">
+            </div>
     </div>
+
 
     <div class="controls">
         <button id="btnStart" onclick="startRecognition()">▶</button>
         <button id="btnStop" onclick="stopRecognition()" disabled>⏸</button>
     </div>
 
-
+    <script src="{{ url_for('static', path='js/message-manager.js') }}"></script>
     <script>
 
-        console.log("Version SDK Azure:", SpeechSDK.SpeechRecognizer.prototype ? "Chargé" : "Non chargé");
-
         const DEV_MODE = "{{ DEV_MODE|tojson }}";
-
         const socket = io();
 
+        // UI Manager
+        const ui = new MessageManager(socket, DEV_MODE);
+
+
+        // sdk azure
         let recognizer = null;
 
         async function getTokenOrRefresh() {
@@ -209,44 +210,6 @@
             console.log("reconnaissance arrêtée");
         }
 
-        // --- Réception Socket (Pour voir ce que voient les autres) ---
-        const colFr = document.getElementById('col-fr');
-        const colEs = document.getElementById('col-es');
-
-
-        socket.on('load_history', (history) => {
-            if (DEV_MODE) console.log("Chargement de l'historique..." + JSON.stringify(history));
-            history.forEach(data => addMessage(data));
-        });
-
-        socket.on('display_message', (data) => {
-            console.log("Affichage du message..." + JSON.stringify(data));
-            addMessage(data);
-        });
-
-        socket.on('clear_screen', () => {
-            colFr.innerHTML = '';
-            colEs.innerHTML = '';
-        });
-
-        function addMessage(data) {
-            // Suppression des messages temporaires précédents
-            document.querySelectorAll('.temp').forEach(e => e.remove());
-
-            // Création du HTML
-            const divFr = document.createElement('div');
-            const divEs = document.createElement('div');
-            
-            divFr.className = data.is_final ? 'msg' : 'msg temp';
-            divEs.className = data.is_final ? 'msg' : 'msg temp';
-
-            divFr.innerText = data.fr;
-            divEs.innerText = data.es;
-
-            // Ajout en bas (car flex-direction: column-reverse gère l'affichage)
-            colFr.prepend(divFr);
-            colEs.prepend(divEs);
-        }
 
     </script>
 

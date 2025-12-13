@@ -5,7 +5,26 @@
         grid-template-columns: 1fr; 
         padding-top: 60px;
     }
-    .fr-col { border-right: none; }
-    .msg { font-size: 1.4em; }
-    .hidden { display: none !important; }
+
+    #conversation {
+        padding: 0 5px;
+    }
+
+    .msg-row {
+        grid-template-columns: 1fr;
+    }
+
+    .container.view-fr .fr-cell {
+        border-right: none !important;
+    }
+
+    /* Si le conteneur a la classe 'view-fr', on cache l'espagnol */
+    .container.view-fr .es-cell {
+        display: none !important;
+    }
+
+    /* Si le conteneur a la classe 'view-es', on cache le français */
+    .container.view-es .fr-cell {
+        display: none !important;
+    }
 }

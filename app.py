@@ -129,6 +129,8 @@ async def disconnect(sid):
 @sio.event
 async def new_translation(sid, data):
     # Note: 'data' est automatiquement converti en dictionnaire Python par python-socketio
+    if data.get("es").strip() == "" or data.get("fr").strip() == "":
+        return
     
     # 1. Gestion des phrases FINALES
     if data.get("is_final"):

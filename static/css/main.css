@@ -12,40 +12,63 @@ body {
 }
 
 :root {
-    --controls-height: clamp(64px, 10vh, 120px);
+    --controls-height: clamp(64px, 10vh, 100px);
 }
 
 .container {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    /* On enlève le grid du container principal */
+    display: block; 
     height: calc(100vh - var(--controls-height));
-    padding: 20px;
+    padding: 0px 10px; /* Le padding sera géré dans les lignes */
     overflow-y: auto;
+    background-color: #131313;
+    
+
 }
 
-.column {
-    padding: 20px;
+#conversation {
     display: flex;
-    flex-direction: column-reverse;
+    flex-direction: column; 
+    justify-content: flex-end; 
+    min-height: 100%;
+    /* padding-bottom: 20px; */
+    max-width: 1200px;
+    margin: 0 auto;
 }
 
-.fr-col { 
-    border-right: 1px solid #333; 
+
+.msg-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* 50% FR / 50% ES */
+    /* border-bottom: 1px solid #222; Séparateur discret entre les phrases */
 }
 
-.es-col {
-    color: #ffe70a;
+.msg-cell {
+    padding: 15px;
+    font-size: 1.7em;
+    /* line-height: 1.2; */
+    word-break: break-word; /* Évite que les mots longs cassent le layout */
 }
 
-.msg {
-    font-size: 2em;
-    line-height: 1.2;
-    margin-bottom: 15px;
+/* Spécificités Français */
+.fr-cell {
+    border-right: 1px solid #333; /* La ligne verticale centrale */
+    color: #fff;
 }
 
-.temp { 
-    opacity: 0.6; 
-    font-style: italic; 
+/* Spécificités Espagnol */
+.es-cell {
+    color: #f2ff00;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Gestion du statut "Temp" (en train de parler) */
+.msg-row.temp {
+    opacity: 0.6;
+    font-style: italic;
 }
 
 .controls {
@@ -131,9 +154,25 @@ body {
     :root {
         --controls-height: clamp(72px, 10vh, 120px);
     }
+    .container {
+        padding: 0px 5px;
+    }
 
-
-    .msg { font-size: 1em; }
+    .msg-cell {
+        font-size: 1.2em;
+        padding: 10px;
+    }
     .hidden { display: none !important; }
     .column { padding: 5px; }
+}
+
+@media (min-width: 1200px) {
+    /* .container {
+        padding: 0px 15vw;
+    } */
+
+    #conversation {
+        border-left: 1px solid #333;
+        border-right: 1px solid #333;
+    }
 }
