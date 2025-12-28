@@ -1,27 +1,122 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" class="dark">
 <head>
     <meta charset="UTF-8">
-    <title>Master - Traduction</title>
-    <script src="{{ url_for('static', path='js/vendor/microsoft.cognitiveservices.speech.sdk.bundle-min.js') }}"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-    <link rel="stylesheet" href="{{ url_for('static', path='css/main.css') }}">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Master - Traduction Live</title>
+    
+    <!-- Tailwind CSS généré (remplace le CDN) -->
+    <link href="{{ url_for('static', path='css/tailwind.css') }}" rel="stylesheet">
+
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <script src="{{ url_for('static', path='js/vendor/socket.io.js') }}"></script>
+    <script src="{{ url_for('static', path='js/message-manager-v0.2.js') }}"></script>
+    <script src="{{ url_for('static', path='js/vendor/azure-speech-sdk/microsoft.cognitiveservices.speech.sdk.bundle-min.js') }}"></script>
 </head>
-<body>
 
-    <div class="container">
-        <div id="conversation" class="scroll-area">
+<body class="bg-background text-zinc-100 h-screen w-screen overflow-hidden flex font-sans">
+
+    <div id="sidebar" class="fixed inset-y-0 left-0 w-80 bg-surface border-r border-zinc-800 transform -translate-x-full transition-transform duration-300 ease-in-out z-50 flex flex-col shadow-2xl">
+        
+        <div class="p-4 border-b border-zinc-700 flex justify-between items-center">
+            <h2 class="text-lg font-semibold text-zinc-300">Historique</h2>
+            <button onclick="toggleSidebar()" class="p-2 hover:bg-zinc-700 rounded-full text-zinc-400">
+                <i class="ph ph-x text-xl"></i>
+            </button>
+        </div>
+
+        <div class="p-4">
+            <a href="/master/new" class="w-full py-3 px-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-full flex items-center gap-3 transition-colors border border-zinc-700">
+                <i class="ph ph-plus text-primary"></i>
+                <span>Nouvelle conversation</span>
+            </a>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-2 space-y-1" id="history-list">
+            {% for conv in convs_list %}
+                <a href="master/conv/{{ conv.id }}" class="block w-full text-left p-3 hover:bg-zinc-800 rounded-lg text-sm text-zinc-400 truncate transition-colors">
+                    {{ conv.title }}
+                </a>
+            {% endfor %}
+        </div>        
+    </div>
+
+    <div class="flex-1 flex flex-col h-full relative">
+        
+        <div id="container-scroll" class="flex-1 overflow-y-auto pb-32 px-4 md:px-12 lg:px-32 scroll-smooth">
+            <div id="conversation" class="flex flex-col justify-end min-h-full py-6 space-y-6">
+                
+                </div>
+        </div>
+
+        <div class="fixed bottom-0 left-0 right-0 h-24 glass-panel border-t border-zinc-800 flex items-center justify-between px-6 md:px-12 z-30">
+            
+            <div class="flex items-center gap-4 w-1/3">
+                <button onclick="toggleSidebar()" class="p-3 hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-white transition-all group" title="Historique">
+                    <i class="ph ph-list text-2xl group-hover:scale-110 transition-transform"></i>
+                </button>
+                
+                <a href="/master/new" class="hidden md:flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-full text-sm text-zinc-300 transition-colors border border-zinc-700/50">
+                    <i class="ph ph-plus"></i>
+                    <span>Nouveau</span>
+                </a>
             </div>
+
+            <div class="flex items-center justify-center gap-6 w-1/3">
+                <button id="btnStart" onclick="startRecognition()" class="w-16 h-16 rounded-full bg-primary hover:bg-[#02b0eb] text-black flex items-center justify-center shadow-[0_0_20px_rgba(0,191,255,0.3)] hover:shadow-[0_0_30px_rgba(0,191,255,0.5)] hover:scale-105 transition-all disabled:opacity-20 disabled:cursor-not-allowed disabled:shadow-none">
+                    <i class="ph-fill ph-microphone text-3xl"></i>
+                </button>
+                
+                <button id="btnStop" onclick="stopRecognition()" disabled class="w-12 h-12 rounded-full bg-zinc-800 hover:bg-red-500/20 hover:text-red-500 text-zinc-400 border border-zinc-700 flex items-center justify-center transition-all disabled:opacity-20 disabled:cursor-not-allowed">
+                    <i class="ph-fill ph-pause text-xl"></i>
+                </button>
+            </div>
+
+            <div class="flex items-center justify-end gap-3 w-1/3">
+                <div class="flex items-center gap-2 px-3 py-1.5 bg-zinc-900 rounded-full border border-zinc-800">
+                    <span class="relative flex h-2.5 w-2.5">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+                    </span>
+                    <span id="viewer-count" class="text-sm font-mono text-zinc-300">34</span>
+                    <i class="ph ph-users text-zinc-500 text-lg ml-1"></i>
+                </div>
+            </div>
+
+        </div>
     </div>
 
+    <script>
+        // --- LOGIQUE UI ---
 
-    <div class="controls">
-        <button id="btnStart" onclick="startRecognition()">▶</button>
-        <button id="btnStop" onclick="stopRecognition()" disabled>⏸</button>
-    </div>
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            
+            // On bascule la classe translate-x-full
+            if (sidebar.classList.contains('-translate-x-full')) {
+                // Ouvrir
+                sidebar.classList.remove('-translate-x-full');
+                overlay.classList.remove('hidden');
+                // Petit délai pour l'opacité (transition fade-in)
+                setTimeout(() => overlay.classList.remove('opacity-0'), 10);
+            } else {
+                // Fermer
+                sidebar.classList.add('-translate-x-full');
+                overlay.classList.add('opacity-0');
+                setTimeout(() => overlay.classList.add('hidden'), 300);
+            }
+        }
 
-    <script src="{{ url_for('static', path='js/message-manager.js') }}"></script>
+        // Fonction pour formater l'heure
+        function getCurrentTime() {
+            const now = new Date();
+            return now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        }
+
+    </script>
+
     <script>
 
         const DEV_MODE = "{{ DEV_MODE|tojson }}";
@@ -30,10 +125,19 @@
         // UI Manager
         const ui = new MessageManager(socket, DEV_MODE);
 
+        async function startNewConversation() {
+            // Réinitialiser l'interface utilisateur
+            ui.clearMessages();
+            // Réinitialiser la reconnaissance
+            stopRecognition();
 
-        // sdk azure
-        let recognizer = null;
+            socket.emit('new_conversation');
 
+            // Réinitialiser le bouton de démarrage
+            document.getElementById('btnStart').disabled = false;
+            document.getElementById('btnStop').disabled = true;
+        }
+        
         async function getTokenOrRefresh() {
             try {
                 const response = await fetch('/api/get-token');
@@ -56,6 +160,9 @@
                 return null;
             }
         }
+
+        // sdk azure
+        let recognizer = null;
 
         // --- Configuration Azure ---
         async function startRecognition() {
@@ -86,75 +193,35 @@
 
             try {
                 recognizer = new SpeechSDK.TranslationRecognizer(speechConfig, audioConfig);
-                
-                function getDetectedLanguage(result) {
-                    return result.language;
-                }
-                // --- Événements ---
 
                 // 1. En cours de parole (Interim)
                 recognizer.recognizing = (s, e) => {
 
                     if (DEV_MODE) console.log("reconnaissance en cours de parole...");
-                    // On détecte la langue
-                    let lang = getDetectedLanguage(e.result); // ex: fr-FR
-                    let text = e.result.text;
-                    let translations = e.result.translations;
 
-                    console.log("Langue détectée:", lang);
-                    console.log("Texte:", text);
-                    console.log("Traductions:", translations);
-
-                    // Logique de filtrage (similaire au Python)
-                    let textFR = "", textES = "", langsource = "";
-                    
-                    if (lang.includes("fr")) {
-                        textFR = text;
-                        textES = translations.get("es");
-                        langsource = "fr";
-                    } else if (lang.includes("es")) {
-                        textES = text;
-                        textFR = translations.get("fr");
-                        langsource = "es";
-                    }
-
-                    // Envoi au serveur (Mode temporaire)
-                    socket.emit('new_translation', {
-                        fr: textFR,
-                        es: textES,
-                        langsource: langsource,
+                    const data = {
+                        lang: e.result.language,
+                        fr: (e.result.language.includes("fr") ? e.result.text : e.result.translations.get("fr")),
+                        es: (e.result.language.includes("es") ? e.result.text : e.result.translations.get("es")),
                         is_final: false,
-                    });
+                    };
+                    socket.emit('new_translation', data);
+                    ui.addMessage(data);
                 };
 
                 // 2. Phrase terminée (Final)
                 recognizer.recognized = (s, e) => {
                     if (e.result.reason == SpeechSDK.ResultReason.TranslatedSpeech) {
                         if (DEV_MODE) console.log("phrase terminée reçus:");
-                        if (DEV_MODE) console.log(e.result);
-                        let lang = getDetectedLanguage(e.result);
-                        let text = e.result.text;
-                        let translations = e.result.translations;
-
-                        console.log("Langue détectée:", lang);
-                        console.log("Texte:", text);
-                        console.log("Traductions:", translations);
-
-                        let textFR = "", textES = "";
-                        if (lang.includes("fr")) {
-                            textFR = text;
-                            textES = translations.get("es");
-                        } else if (lang.includes("es")) {
-                            textES = text;
-                            textFR = translations.get("fr");
-                        }
-
-                        // Envoi au serveur (Mode Final - Sera sauvegardé)
-                        socket.emit('new_translation', {
-                            fr: textFR,
-                            es: textES,
-                            is_final: true
-                        });
+                        const data = {
+                            lang: e.result.language,
+                            fr: (e.result.language.includes("fr") ? e.result.text : e.result.translations.get("fr")),
+                            es: (e.result.language.includes("es") ? e.result.text : e.result.translations.get("es")),
+                            timestamp: new Date().toISOString(),
+                            is_final: true,
+                        };
+                        socket.emit('new_translation', data);
+                        ui.addMessage(data);
                     }
                 };
 
@@ -198,6 +265,7 @@
         }
 
         function stopRecognition() {
+            if (!recognizer) return;
             recognizer.stopContinuousRecognitionAsync();
             document.getElementById('btnStart').disabled = false;
             document.getElementById('btnStop').disabled = true;

@@ -95,14 +95,8 @@
 
     <script>
         function goToMaster() {
-            // Demande le mot de passe défini dans le .env (par défaut "mariage2025")
-            // Si c'est vide, on ne fait rien
-            const pwd = prompt("Mot de passe Orateur (Admin) :");
-            
-            if (pwd) {
-                // Redirection vers la route sécurisée
-                window.location.href = `/master?pwd=${pwd}`;
-            }
+            // Redirection vers la page de connexion sécurisée
+            window.location.href = '/login';
         }
     </script>
 </body>

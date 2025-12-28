@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connexion - Traduction Live</title>
+    
+    <!-- Tailwind CSS -->
+    <link href="{{ url_for('static', path='css/tailwind.css') }}" rel="stylesheet">
+</head>
+<body class="bg-zinc-900 text-zinc-100 min-h-screen flex items-center justify-center p-4">
+    <div class="w-full" style="max-width: 420px;">
+        <!-- Card -->
+        <div class="bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl p-8 sm:p-10">
+            <!-- Header -->
+            <div class="text-center mb-6">
+                <h1 class="text-xl font-semibold text-zinc-100 mb-1">Connexion</h1>
+                <p class="text-sm text-zinc-400">Espace administrateur</p>
+            </div>
+
+            <!-- Error Message -->
+            <div id="errorMessage" class="hidden mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded text-sm text-red-400">
+            </div>
+
+            <!-- Form -->
+            <form id="loginForm" class="space-y-4">
+                <div>
+                    <label for="password" class="block text-sm font-medium text-zinc-300 mb-1.5">
+                        Mot de passe
+                    </label>
+                    <input 
+                        type="password" 
+                        id="password" 
+                        name="password"
+                        required
+                        autofocus
+                        autocomplete="current-password"
+                        placeholder="••••••••"
+                        class="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded text-zinc-100 placeholder-zinc-600 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors"
+                    >
+                </div>
+
+                <button 
+                    type="button"
+                    id="loginBtn"
+                    class="w-full py-2 px-4 bg-primary hover:bg-primary/90 text-black font-medium rounded text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    <span id="loginBtnText">Se connecter</span>
+                    <span id="loginBtnLoading" class="hidden">Connexion...</span>
+                </button>
+            </form>
+
+            <!-- Back Link -->
+            <div class="mt-6 text-center">
+                <a href="/" class="text-zinc-500 hover:text-zinc-400 text-sm transition-colors">
+                    ← Retour à l'accueil
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Elements
+        const form = document.getElementById('loginForm');
+        const passwordInput = document.getElementById('password');
+        const loginBtn = document.getElementById('loginBtn');
+        const loginBtnText = document.getElementById('loginBtnText');
+        const loginBtnLoading = document.getElementById('loginBtnLoading');
+        const errorMessage = document.getElementById('errorMessage');
+
+        // Fonction pour afficher une erreur
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.remove('hidden');
+        }
+
+        // Fonction pour cacher l'erreur
+        function hideError() {
+            errorMessage.classList.add('hidden');
+        }
+
+        // Fonction pour activer/désactiver le bouton
+        function setLoading(loading) {
+            loginBtn.disabled = loading;
+            if (loading) {
+                loginBtnText.classList.add('hidden');
+                loginBtnLoading.classList.remove('hidden');
+            } else {
+                loginBtnText.classList.remove('hidden');
+                loginBtnLoading.classList.add('hidden');
+            }
+        }
+
+        // Fonction de connexion
+        async function handleLogin() {
+            const password = passwordInput.value.trim();
+            
+            if (!password) {
+                showError('Veuillez entrer un mot de passe');
+                passwordInput.focus();
+                return;
+            }
+
+            hideError();
+            setLoading(true);
+
+            try {
+                const formData = new FormData();
+                formData.append('password', password);
+
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                let data;
+                try {
+                    data = await response.json();
+                } catch (jsonError) {
+                    throw new Error('Réponse invalide du serveur');
+                }
+
+                if (response.ok && data.success) {
+                    // Succès : rediriger vers /master
+                    window.location.href = '/master';
+                } else {
+                    // Erreur d'authentification
+                    showError(data.detail || 'Mot de passe incorrect');
+                    passwordInput.value = '';
+                    passwordInput.focus();
+                }
+            } catch (error) {
+                console.error('Erreur de connexion:', error);
+                showError('Erreur de connexion. Veuillez réessayer.');
+                passwordInput.focus();
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        // Event listeners
+        loginBtn.addEventListener('click', handleLogin);
+
+        // Soumission avec Enter
+        passwordInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !loginBtn.disabled) {
+                e.preventDefault();
+                handleLogin();
+            }
+        });
+
+        // Empêcher la soumission du formulaire (sécurité supplémentaire)
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            handleLogin();
+        });
+
+        // Focus sur le champ password au chargement
+        passwordInput.focus();
+    </script>
+</body>
+</html>

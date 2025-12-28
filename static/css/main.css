@@ -22,9 +22,8 @@ body {
     padding: 0px 10px; /* Le padding sera géré dans les lignes */
     overflow-y: auto;
     background-color: #131313;
-    
-
 }
+
 
 #conversation {
     display: flex;
@@ -71,7 +70,7 @@ body {
     font-style: italic;
 }
 
-.controls {
+.controls{
     position: fixed;
     bottom: 0;
     left: 0;
@@ -87,7 +86,11 @@ body {
     box-sizing: border-box;
 }
 
-.controls button {
+/*------------ START STOP BUTTON ------------*/
+
+.controls .central-controls
+
+.controls .central-controls button {
     width: calc(var(--controls-height) * 0.8);
     height: calc(var(--controls-height) * 0.8);
     border-radius: 50%;
@@ -102,34 +105,34 @@ body {
     justify-content: center;
 }
 
-.controls button:hover:not(:disabled) {
+.controls .central-controls button:hover:not(:disabled) {
     background: #555;
     transform: scale(1.1);
 }
 
-.controls button:active:not(:disabled) {
+.controls .central-controls button:active:not(:disabled) {
     transform: scale(0.95);
 }
 
-.controls button:disabled {
+.controls .central-controls button:disabled {
     opacity: 0.3;
     cursor: not-allowed;
     
 }
 
-.controls button#btnStart:not(:disabled) {
+.controls .central-controls button#btnStart:not(:disabled) {
     background: #00bfff;
 }
 
-.controls button#btnStart:not(:disabled):hover {
+.controls .central-controls button#btnStart:not(:disabled):hover {
     background: #02b0eb;
 }
 
-.controls button#btnStop:not(:disabled) {
+.controls .central-controls button#btnStop:not(:disabled) {
     background: #ff4444;
 }
 
-.controls button#btnStop:not(:disabled):hover {
+.controls .central-controls button#btnStop:not(:disabled):hover {
     background: #cc0000;
 }
 

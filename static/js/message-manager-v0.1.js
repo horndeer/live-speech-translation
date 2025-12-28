@@ -18,7 +18,7 @@ class MessageManager {
             if (this.devMode) console.log("Chargement historique:", history.length, "messages");
             
             // Vider l'écran pour éviter les doublons
-            this.conversation.innerHTML = '';
+            this.clearConversation();
             
             history.forEach(data => this.addMessage(data));
 
@@ -34,8 +34,12 @@ class MessageManager {
         });
 
         this.socket.on('clear_screen', () => {
-            this.conversation.innerHTML = '';
+            this.clearConversation();
         });
+    }
+
+    clearConversation() {
+        this.conversation.innerHTML = '';
     }
 
     addMessage(data) {
