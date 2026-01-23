@@ -199,6 +199,7 @@
                         es: (e.result.language.includes("es") ? e.result.text : e.result.translations.get("es")),
                         is_final: false,
                     };
+                    if (DEV_MODE) console.log("emiting temp data:", data);
                     socket.emit('new_translation', data);
                     ui.addMessage(data);
                 };
@@ -214,6 +215,7 @@
                             timestamp: new Date().toISOString(),
                             is_final: true,
                         };
+                        if (DEV_MODE) console.log("emiting final data:", data);
                         socket.emit('new_translation', data);
                         ui.addMessage(data);
                     }
@@ -300,18 +302,24 @@
         async function runDevTranslationFlood() {
             const btn = document.getElementById('btnDevFlood');
             if (btn) btn.disabled = true;
-            const interimDelay = 400;
+            const wordDelay = 90;
             const finalDelay = 600;
             for (const phrase of DEV_SAMPLE_PHRASES) {
-                const dataInterim = {
-                    lang: phrase.lang,
-                    fr: phrase.fr,
-                    es: phrase.es,
-                    is_final: false,
-                };
-                socket.emit('new_translation', dataInterim);
-                ui.addMessage(dataInterim);
-                await new Promise(r => setTimeout(r, interimDelay));
+                const frWords = phrase.fr.split(/\s+/);
+                const esWords = phrase.es.split(/\s+/);
+                const steps = Math.max(frWords.length, esWords.length, 1);
+                for (let i = 0; i < steps; i++) {
+                    const dataInterim = {
+                        lang: phrase.lang,
+                        fr: frWords.slice(0, i + 1).join(' '),
+                        es: esWords.slice(0, i + 1).join(' '),
+                        is_final: false,
+                    };
+                    if (DEV_MODE) console.log("emiting temp data:", dataInterim);
+                    socket.emit('new_translation', dataInterim);
+                    ui.addMessage(dataInterim);
+                    await new Promise(r => setTimeout(r, wordDelay));
+                }
                 const dataFinal = {
                     lang: phrase.lang,
                     fr: phrase.fr,
@@ -319,6 +327,7 @@
                     timestamp: new Date().toISOString(),
                     is_final: true,
                 };
+                if (DEV_MODE) console.log("emiting final data:", dataFinal);
                 socket.emit('new_translation', dataFinal);
                 ui.addMessage(dataFinal);
                 await new Promise(r => setTimeout(r, finalDelay));

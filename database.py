@@ -4,7 +4,17 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlmodel.ext.asyncio.session import AsyncSession
 from datetime import datetime
+import logging
+import os
 
+DEV_MODE = os.environ.get("DEV_MODE", "False") == "True"
+
+logger = logging.getLogger(__name__)
+if DEV_MODE:
+    logger.setLevel(logging.DEBUG)
+else:
+    logger.setLevel(logging.INFO)
+logger.addHandler(logging.StreamHandler())
 
 # 1. Configuration
 # Note: On garde create_async_engine de SQLAlchemy car SQLModel ne l'expose pas encore
@@ -61,7 +71,8 @@ async def add_message(
         )
         session.add(msg)
         await session.commit()
-        return msg
+        await session.refresh(msg)
+        logger.debug(f"Message sauvegardé: {msg.id}")
 
 
 async def get_conversations():

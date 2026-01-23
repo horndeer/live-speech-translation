@@ -1,4 +1,5 @@
 import datetime
+import logging
 import os
 import json
 import secrets
@@ -22,6 +23,12 @@ SPEECH_REGION = os.environ.get("SPEECH_REGION")
 MASTER_PASSWORD = os.environ.get("MASTER_PASSWORD", "admin")
 DB_FILE = "storage/transcript_history.json"
 DEV_MODE = os.environ.get("DEV_MODE", "False") == "True"
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG if DEV_MODE else logging.INFO)
+_handler = logging.StreamHandler()
+_handler.setLevel(logging.DEBUG if DEV_MODE else logging.INFO)
+logger.addHandler(_handler)
 
 # Configuration de sécurité pour les sessions
 # Génère une clé secrète si elle n'existe pas (à définir en production via .env)
@@ -447,31 +454,37 @@ async def sync_viewer_count():
 
 @sio.event
 async def new_translation(sid, data):
-    # On sauvegarde SEULEMENT si c'est final
-    if data.get("es").strip() == "" or data.get("fr").strip() == "":
+    if (data.get("fr") or "").strip() == "" or (data.get("es") or "").strip() == "":
         return
 
-    if data.get("is_final"):
-        await add_message(
-            conversation_id=CURRENT_SESSION_ID,
-            fr=data["fr"],
-            es=data["es"],
-            source_language=data.get("lang", "unknown"),
-            timestamp=data["timestamp"],
-        )
-
-        history.append(
-            {
-                "fr": data["fr"],
-                "es": data["es"],
-                "timestamp": data["timestamp"],
-            }
-        )
-
-    # On broadcast à tout le monde (ajouter source_language pour cohérence)
+    # 1. Broadcast d'abord : les viewers doivent toujours recevoir (même si la sauvegarde échoue)
     broadcast_data = data.copy()
     broadcast_data["source_language"] = data.get("lang", "unknown")
+    broadcast_data["is_final"] = bool(data.get("is_final"))
     await sio.emit("display_message", broadcast_data, skip_sid=sid)
+
+    # 2. Sauvegarde si final
+    if data.get("is_final"):
+        logger.info(f"receiving final message: {data}")
+        try:
+            await add_message(
+                conversation_id=CURRENT_SESSION_ID,
+                fr=data["fr"],
+                es=data["es"],
+                source_language=data.get("lang", "unknown"),
+                timestamp=parse_iso(data.get("timestamp")),
+            )
+            logger.debug(f"Sauvegarde du message réussi dans: {CURRENT_SESSION_ID}")
+            history.append(
+                {
+                    "fr": data["fr"],
+                    "es": data["es"],
+                    "timestamp": data["timestamp"],
+                    "source_language": data.get("lang", "unknown"),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Erreur lors de la sauvegarde: {e}")
 
 
 # Pour lancer le serveur :
