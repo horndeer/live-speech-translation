@@ -55,9 +55,15 @@ async def lifespan(app: FastAPI):
         CURRENT_SESSION_ID = last_conv.id
         messages = await get_messages_by_conversation(CURRENT_SESSION_ID)
         history = [
-            {"fr": msg.fr, "es": msg.es, "timestamp": msg.timestamp.isoformat()}
+            {
+                "fr": msg.fr,
+                "es": msg.es,
+                "timestamp": msg.timestamp.isoformat(),
+                "source_language": msg.source_language,
+            }
             for msg in messages
         ]
+        print("HISTORY: ", history)
         print(
             f"Chargement de la dernière session, id:{CURRENT_SESSION_ID}, name:{last_conv.title}, messages:{len(messages)}"
         )
@@ -262,19 +268,181 @@ async def get_azure_token():
             )
 
 
+async def get_connected_sockets_count() -> int:
+    """
+    Retourne le nombre de sockets connectés à un instant t.
+    Utilise le manager de socketio pour compter les participants actifs.
+    """
+    try:
+        # Obtenir tous les participants dans le namespace par défaut '/'
+        participants = await sio.manager.get_participants("/", None)
+        return len(participants) if participants else 0
+    except Exception as e:
+        print(f"Erreur lors du comptage des sockets: {e}")
+        return 0
+
+
+async def get_socket_statistics() -> dict:
+    """
+    Retourne des statistiques détaillées sur les connexions Socket.IO.
+    """
+    try:
+        total_count = await get_connected_sockets_count()
+        master_sid = sid_registry.get("master")
+        is_master_connected = master_sid is not None
+
+        # Compter les viewers (tous les sockets sauf le master)
+        viewer_count = total_count - (1 if is_master_connected else 0)
+
+        return {
+            "total_connected": total_count,
+            "master_connected": is_master_connected,
+            "master_sid": master_sid,
+            "viewer_count": max(0, viewer_count),  # S'assurer que c'est >= 0
+            "timestamp": datetime.now().isoformat(),
+        }
+    except Exception as e:
+        print(f"Erreur lors de la récupération des statistiques: {e}")
+        return {
+            "total_connected": 0,
+            "master_connected": False,
+            "master_sid": None,
+            "viewer_count": 0,
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e),
+        }
+
+
+@app.get("/api/socket-count")
+async def get_socket_count():
+    """
+    Endpoint API pour obtenir le nombre de sockets connectés.
+    Accessible sans authentification pour faciliter le monitoring.
+    """
+    count = await get_connected_sockets_count()
+    return {"connected_sockets": count, "timestamp": datetime.now().isoformat()}
+
+
+@app.get("/api/socket-stats")
+async def get_socket_stats():
+    """
+    Endpoint API pour obtenir des statistiques détaillées sur les connexions.
+    Inclut le nombre total, l'état du master, et le nombre de viewers.
+    """
+    stats = await get_socket_statistics()
+    return stats
+
+
+@app.post("/api/sync-socket-count")
+async def sync_socket_count_endpoint():
+    """
+    Endpoint API pour synchroniser manuellement le compteur de viewers.
+    Utile pour corriger les désynchronisations.
+    """
+    viewer_count = await sync_viewer_count()
+    stats = await get_socket_statistics()
+    return {"success": True, "synced_viewer_count": viewer_count, "statistics": stats}
+
+
 # --- ÉVÉNEMENTS SOCKET.IO (Asynchrones) ---
+
+sid_registry = {
+    "master": None,
+    "viewer_count": 0,
+}
 
 
 @sio.event
 async def connect(sid, environ):
-    global history
-    print(f"Client connecté: {sid}")
+    global history, sid_registry
+    # Récupérer le Referer depuis environ
+    referer = environ.get("HTTP_REFERER", "")
+
+    if "/master" in referer:
+        client_type = "master"
+    elif "/viewer" in referer:
+        client_type = "viewer"
+    else:
+        client_type = "unknown"
+
+    print(f"Client connecté: {sid} depuis {client_type}")
+
+    # Enregistrer le type de client (vous avez déjà sid_registry)
+    if client_type == "master":
+        sid_registry["master"] = sid
+    elif client_type == "viewer":
+        sid_registry["viewer_count"] += 1
+
     await sio.emit("load_history", history, to=sid)
+
+    if sid_registry.get("master"):
+        await sio.emit(
+            "update_viewer_count",
+            sid_registry["viewer_count"],
+            to=sid_registry["master"],
+        )
 
 
 @sio.event
 async def disconnect(sid):
-    print(f"Client déconnecté: {sid}")
+    global sid_registry
+    try:
+        if sid == sid_registry.get("master"):
+            sid_registry["master"] = None
+        else:
+            # Décrémenter le compteur de viewers
+            sid_registry["viewer_count"] = max(
+                0, sid_registry.get("viewer_count", 0) - 1
+            )
+            # Notifier le master si connecté
+            if sid_registry.get("master"):
+                await sio.emit(
+                    "update_viewer_count",
+                    sid_registry["viewer_count"],
+                    to=sid_registry["master"],
+                )
+
+        # Afficher le nombre total de sockets restants (pour debug)
+        total_count = await get_connected_sockets_count()
+        print(f"Client déconnecté: {sid}. Sockets restants: {total_count}")
+    except Exception as e:
+        print(f"Erreur lors de la déconnexion: {e}")
+
+
+async def sync_viewer_count():
+    """
+    Synchronise le compteur de viewers avec le nombre réel de sockets connectés.
+    Utile pour corriger les désynchronisations.
+    """
+    global sid_registry
+    try:
+        total_count = await get_connected_sockets_count()
+        master_sid = sid_registry.get("master")
+
+        # Vérifier si le master est toujours connecté en vérifiant s'il est dans les participants
+        is_master_connected = False
+        if master_sid:
+            participants = await sio.manager.get_participants("/", None)
+            is_master_connected = participants and master_sid in participants
+
+        # Si le master n'est plus connecté, le retirer du registre
+        if master_sid and not is_master_connected:
+            sid_registry["master"] = None
+
+        # Recalculer le nombre de viewers
+        viewer_count = total_count - (1 if is_master_connected else 0)
+        sid_registry["viewer_count"] = max(0, viewer_count)
+
+        # Mettre à jour le master si nécessaire
+        if master_sid and is_master_connected:
+            await sio.emit(
+                "update_viewer_count", sid_registry["viewer_count"], to=master_sid
+            )
+
+        return sid_registry["viewer_count"]
+    except Exception as e:
+        print(f"Erreur lors de la synchronisation: {e}")
+        return sid_registry.get("viewer_count", 0)
 
 
 @sio.event
@@ -288,12 +456,22 @@ async def new_translation(sid, data):
             conversation_id=CURRENT_SESSION_ID,
             fr=data["fr"],
             es=data["es"],
-            source_language=data.get("lang", "fr"),
-            timestamp=parse_iso(data["timestamp"]),
+            source_language=data.get("lang", "unknown"),
+            timestamp=data["timestamp"],
         )
 
-    # On broadcast à tout le monde
-    await sio.emit("display_message", data, skip_sid=sid)
+        history.append(
+            {
+                "fr": data["fr"],
+                "es": data["es"],
+                "timestamp": data["timestamp"],
+            }
+        )
+
+    # On broadcast à tout le monde (ajouter source_language pour cohérence)
+    broadcast_data = data.copy()
+    broadcast_data["source_language"] = data.get("lang", "unknown")
+    await sio.emit("display_message", broadcast_data, skip_sid=sid)
 
 
 # Pour lancer le serveur :

@@ -1,79 +1,140 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Live Traduction</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='css/main.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', path='css/msg-viewer.css') }}">
-</head>
-<body>
-
-    <div class="mobile-controls">
-        <button class="mobile-btn active" onclick="showLang('fr')" id="btn-fr">Français 🇫🇷</button>
-        <button class="mobile-btn" onclick="showLang('es')" id="btn-es">Español 🇲🇽</button>
-    </div>
-
-    <div class="container">
-        <div id="conversation" class="scroll-area">
-            </div>
-    </div>
     
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-    <script src="{{ url_for('static', path='js/message-manager.js') }}"></script>
+    <!-- Tailwind CSS généré (même que master.html) -->
+    <link href="{{ url_for('static', path='css/tailwind.css') }}" rel="stylesheet">
+    
+    <script src="{{ url_for('static', path='js/vendor/socket.io.js') }}"></script>
+    <script src="{{ url_for('static', path='js/message-manager-v0.2.js') }}"></script>
+</head>
+
+<body class="bg-background text-zinc-100 h-screen w-screen overflow-hidden flex font-sans">
+
+    <!-- Contrôles mobiles pour sélection de langue -->
+    <div id="mobile-controls" class="hidden fixed top-0 left-0 right-0 z-50 glass-panel border-b border-zinc-800">
+        <div class="flex items-center justify-center gap-2 p-3">
+            <button onclick="showLang('fr')" id="btn-fr" class="px-4 py-2 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition-colors border border-zinc-700 text-sm font-medium">
+                Français 🇫🇷
+            </button>
+            <button onclick="showLang('es')" id="btn-es" class="px-4 py-2 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition-colors border border-zinc-700 text-sm font-medium">
+                Español 🇲🇽
+            </button>
+        </div>
+    </div>
+
+    <div class="flex-1 flex flex-col h-full relative">
+        
+        <!-- Zone de scroll pour les messages -->
+        <div id="container-scroll" class="flex-1 overflow-y-auto pb-6 px-4 md:px-12 lg:px-32 scroll-smooth" style="padding-top: 0;">
+            <div id="conversation" class="flex flex-col justify-end min-h-full py-6">
+                <!-- Les messages seront ajoutés ici par MessageManager -->
+            </div>
+        </div>
+    </div>
+
     <script>
         const DEV_MODE = "{{ DEV_MODE|tojson }}";
         const socket = io();
         
-        // UI Manager
+        // UI Manager (utilise message-manager-v0.2.js)
         const ui = new MessageManager(socket, DEV_MODE);
-    
+
         // --- GESTION MOBILE ---
         
-        // 1. Initialisation immédiate
-        // On définit le mode par défaut (FR) dès le lancement
-        if (window.innerWidth <= 768) {
-            setMobileView('fr'); 
+        // Fonction pour afficher/masquer les contrôles mobiles
+        function updateMobileControls() {
+            const mobileControls = document.getElementById('mobile-controls');
+            if (window.innerWidth <= 768) {
+                mobileControls.classList.remove('hidden');
+                // Ajuster le padding-top de container-scroll pour laisser de la place aux contrôles
+                document.getElementById('container-scroll').style.paddingTop = '60px';
+            } else {
+                mobileControls.classList.add('hidden');
+                document.getElementById('container-scroll').style.paddingTop = '0';
+            }
         }
-    
-        // 2. Fonction simplifiée
+
+        // Initialisation au chargement
+        if (window.innerWidth <= 768) {
+            setMobileView('fr');
+        }
+        updateMobileControls();
+
+        // Fonction pour changer la langue affichée
         function showLang(lang) {
             setMobileView(lang);
-        } 
-    
+        }
+
         function setMobileView(lang) {
-            const container = document.querySelector('.container');
+            const container = document.getElementById('container-scroll');
             const btnFr = document.getElementById('btn-fr');
             const btnEs = document.getElementById('btn-es');
-    
-            // Gestion des Boutons (Visuel)
+
+            // Gestion des boutons (visuel)
             if (btnFr && btnEs) {
-                btnFr.className = lang === 'fr' ? 'mobile-btn active' : 'mobile-btn';
-                btnEs.className = lang === 'es' ? 'mobile-btn active' : 'mobile-btn';
+                if (lang === 'fr') {
+                    btnFr.classList.add('bg-primary', 'text-black');
+                    btnFr.classList.remove('bg-zinc-800', 'text-zinc-200');
+                    btnEs.classList.remove('bg-primary', 'text-black');
+                    btnEs.classList.add('bg-zinc-800', 'text-zinc-200');
+                } else {
+                    btnEs.classList.add('bg-primary', 'text-black');
+                    btnEs.classList.remove('bg-zinc-800', 'text-zinc-200');
+                    btnFr.classList.remove('bg-primary', 'text-black');
+                    btnFr.classList.add('bg-zinc-800', 'text-zinc-200');
+                }
             }
-    
-            // Gestion de l'affichage (Magie CSS)
-            // On nettoie les classes et on met la bonne
+
+            // Gestion de l'affichage (CSS)
             container.classList.remove('view-fr', 'view-es');
             container.classList.add('view-' + lang);
-            
-            // C'est tout ! Pas besoin de querySelectorAll ni de loop.
-            // CSS Grid s'adaptera automatiquement.
         }
-    
-        // Astuce : Écouter le redimensionnement pour retirer les classes si on repasse sur PC
+
+        // Écouter le redimensionnement
         window.addEventListener('resize', () => {
+            updateMobileControls();
             if (window.innerWidth > 768) {
-                document.querySelector('.container').classList.remove('view-fr', 'view-es');
+                // Desktop: afficher les deux langues
+                const container = document.getElementById('container-scroll');
+                container.classList.remove('view-fr', 'view-es');
             } else {
-                // Si on repasse en mobile, on remet le français par défaut si rien n'est set
-                const container = document.querySelector('.container');
+                // Mobile: remettre le français par défaut si rien n'est set
+                const container = document.getElementById('container-scroll');
                 if (!container.classList.contains('view-fr') && !container.classList.contains('view-es')) {
                     setMobileView('fr');
                 }
             }
         });
-    
     </script>
+
+    <style>
+        /* Styles pour la sélection de langue en mobile */
+        @media (max-width: 768px) {
+            /* Si le conteneur a la classe 'view-fr', on cache l'espagnol */
+            #container-scroll.view-fr #conversation .msg-row > div:last-child {
+                display: none !important;
+            }
+
+            /* Si le conteneur a la classe 'view-es', on cache le français */
+            #container-scroll.view-es #conversation .msg-row > div:first-child {
+                display: none !important;
+            }
+
+            /* En mobile, on affiche les messages en une seule colonne */
+            #container-scroll.view-fr #conversation .msg-row,
+            #container-scroll.view-es #conversation .msg-row {
+                grid-template-columns: 1fr !important;
+            }
+
+            #container-scroll.view-fr #conversation .msg-row > div:first-child,
+            #container-scroll.view-es #conversation .msg-row > div:last-child {
+                border-right: none !important;
+            }
+        }
+    </style>
 </body>
 </html>

@@ -45,7 +45,7 @@
     <div class="flex-1 flex flex-col h-full relative">
         
         <div id="container-scroll" class="flex-1 overflow-y-auto pb-32 px-4 md:px-12 lg:px-32 scroll-smooth">
-            <div id="conversation" class="flex flex-col justify-end min-h-full py-6 space-y-6">
+            <div id="conversation" class="flex flex-col justify-end min-h-full py-6 ">
                 
                 </div>
         </div>
@@ -61,6 +61,9 @@
                     <i class="ph ph-plus"></i>
                     <span>Nouveau</span>
                 </a>
+                {% if DEV_MODE %}
+                <button id="btnDevFlood" onclick="runDevTranslationFlood()" class="p-2 rounded-full text-zinc-500 hover:text-amber-500 hover:bg-zinc-800 border border-zinc-700/50 text-xs" title="Simuler un flux de traductions (remplir la page)">Dev</button>
+                {% endif %}
             </div>
 
             <div class="flex items-center justify-center gap-6 w-1/3">
@@ -125,18 +128,9 @@
         // UI Manager
         const ui = new MessageManager(socket, DEV_MODE);
 
-        async function startNewConversation() {
-            // Réinitialiser l'interface utilisateur
-            ui.clearMessages();
-            // Réinitialiser la reconnaissance
-            stopRecognition();
-
-            socket.emit('new_conversation');
-
-            // Réinitialiser le bouton de démarrage
-            document.getElementById('btnStart').disabled = false;
-            document.getElementById('btnStop').disabled = true;
-        }
+        socket.on("update_viewer_count", (count) => {
+            document.getElementById('viewer-count').textContent = count;
+        });
         
         async function getTokenOrRefresh() {
             try {
@@ -278,6 +272,60 @@
             console.log("reconnaissance arrêtée");
         }
 
+        {% if DEV_MODE %}
+        // --- Simulation flux traductions (format identique à startRecognition) ---
+        const DEV_SAMPLE_PHRASES = [
+            { lang: "fr-FR", fr: "Bienvenue à tous, nous commençons la session.", es: "Bienvenidos a todos, comenzamos la sesión." },
+            { lang: "fr-FR", fr: "Merci d'être présents aujourd'hui.", es: "Gracias por estar presentes hoy." },
+            { lang: "es-MX", fr: "Je vais maintenant répondre à vos questions.", es: "Voy a responder ahora a sus preguntas." },
+            { lang: "fr-FR", fr: "Le budget prévu sera discuté en fin de réunion.", es: "El presupuesto previsto se discutirá al final de la reunión." },
+            { lang: "es-MX", fr: "C'est un point important à ne pas oublier.", es: "Es un punto importante que no hay que olvidar." },
+            { lang: "fr-FR", fr: "Nous avons besoin de votre avis sur ce sujet.", es: "Necesitamos su opinión sobre este tema." },
+            { lang: "fr-FR", fr: "La prochaine étape est prévue pour mardi.", es: "La próxima etapa está prevista para el martes." },
+            { lang: "es-MX", fr: "Je résume les décisions prises.", es: "Resumo las decisiones tomadas." },
+            { lang: "fr-FR", fr: "N'hésitez pas à intervenir si vous avez des questions.", es: "No duden en intervenir si tienen preguntas." },
+            { lang: "fr-FR", fr: "Le délai de livraison est fixé à quinze jours.", es: "El plazo de entrega está fijado en quince días." },
+            { lang: "es-MX", fr: "Nous allons examiner les propositions une par une.", es: "Vamos a examinar las propuestas una por una." },
+            { lang: "fr-FR", fr: "Cela correspond exactement à ce que nous voulions.", es: "Eso corresponde exactamente a lo que queríamos." },
+            { lang: "fr-FR", fr: "Je vous envoie le compte-rendu par email.", es: "Les envío el acta por correo electrónico." },
+            { lang: "es-MX", fr: "La réunion est ajournée à la semaine prochaine.", es: "La reunión queda aplazada para la próxima semana." },
+            { lang: "fr-FR", fr: "Merci à tous pour votre participation.", es: "Gracias a todos por su participación." },
+            { lang: "fr-FR", fr: "Nous devrions avoir une réponse d'ici vendredi.", es: "Deberíamos tener una respuesta para el viernes." },
+            { lang: "es-MX", fr: "C'est une excellente idée, à creuser.", es: "Es una excelente idea, hay que desarrollarla." },
+            { lang: "fr-FR", fr: "Le projet avance comme prévu.", es: "El proyecto avanza según lo previsto." },
+            { lang: "fr-FR", fr: "Je vous propose qu'on fasse une pause de cinq minutes.", es: "Les propongo que hagamos una pausa de cinco minutos." },
+            { lang: "es-MX", fr: "Tout le monde est d'accord sur ce point ?", es: "¿Todo el mundo está de acuerdo en este punto?" },
+        ];
+
+        async function runDevTranslationFlood() {
+            const btn = document.getElementById('btnDevFlood');
+            if (btn) btn.disabled = true;
+            const interimDelay = 400;
+            const finalDelay = 600;
+            for (const phrase of DEV_SAMPLE_PHRASES) {
+                const dataInterim = {
+                    lang: phrase.lang,
+                    fr: phrase.fr,
+                    es: phrase.es,
+                    is_final: false,
+                };
+                socket.emit('new_translation', dataInterim);
+                ui.addMessage(dataInterim);
+                await new Promise(r => setTimeout(r, interimDelay));
+                const dataFinal = {
+                    lang: phrase.lang,
+                    fr: phrase.fr,
+                    es: phrase.es,
+                    timestamp: new Date().toISOString(),
+                    is_final: true,
+                };
+                socket.emit('new_translation', dataFinal);
+                ui.addMessage(dataFinal);
+                await new Promise(r => setTimeout(r, finalDelay));
+            }
+            if (btn) btn.disabled = false;
+        }
+        {% endif %}
 
     </script>
 

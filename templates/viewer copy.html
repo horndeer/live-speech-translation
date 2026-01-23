@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Traduction</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/msg-viewer.css') }}">
+</head>
+<body>
+
+    <div class="mobile-controls">
+        <button class="mobile-btn active" onclick="showLang('fr')" id="btn-fr">Français 🇫🇷</button>
+        <button class="mobile-btn" onclick="showLang('es')" id="btn-es">Español 🇲🇽</button>
+    </div>
+
+    <div class="container">
+        <div id="conversation" class="scroll-area">
+            </div>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="{{ url_for('static', path='js/message-manager.js') }}"></script>
+    <script>
+        const DEV_MODE = "{{ DEV_MODE|tojson }}";
+        const socket = io();
+        
+        // UI Manager
+        const ui = new MessageManager(socket, DEV_MODE);
+    
+        // --- GESTION MOBILE ---
+        
+        // 1. Initialisation immédiate
+        // On définit le mode par défaut (FR) dès le lancement
+        if (window.innerWidth <= 768) {
+            setMobileView('fr'); 
+        }
+    
+        // 2. Fonction simplifiée
+        function showLang(lang) {
+            setMobileView(lang);
+        } 
+    
+        function setMobileView(lang) {
+            const container = document.querySelector('.container');
+            const btnFr = document.getElementById('btn-fr');
+            const btnEs = document.getElementById('btn-es');
+    
+            // Gestion des Boutons (Visuel)
+            if (btnFr && btnEs) {
+                btnFr.className = lang === 'fr' ? 'mobile-btn active' : 'mobile-btn';
+                btnEs.className = lang === 'es' ? 'mobile-btn active' : 'mobile-btn';
+            }
+    
+            // Gestion de l'affichage (Magie CSS)
+            // On nettoie les classes et on met la bonne
+            container.classList.remove('view-fr', 'view-es');
+            container.classList.add('view-' + lang);
+            
+            // C'est tout ! Pas besoin de querySelectorAll ni de loop.
+            // CSS Grid s'adaptera automatiquement.
+        }
+    
+        // Astuce : Écouter le redimensionnement pour retirer les classes si on repasse sur PC
+        window.addEventListener('resize', () => {
+            if (window.innerWidth > 768) {
+                document.querySelector('.container').classList.remove('view-fr', 'view-es');
+            } else {
+                // Si on repasse en mobile, on remet le français par défaut si rien n'est set
+                const container = document.querySelector('.container');
+                if (!container.classList.contains('view-fr') && !container.classList.contains('view-es')) {
+                    setMobileView('fr');
+                }
+            }
+        });
+    
+    </script>
+</body>
+</html>
