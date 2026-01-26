@@ -3,8 +3,10 @@ name: Deploy to Google Cloud
 on:
   push:
     branches:
-      - main  # Ou 'master' selon votre branche principale
+      - main
 
+# Prérequis sur le serveur : Node.js + npm (pour Tailwind), Python + venv, pm2.
+# Voir README-TAILWIND.md et la section Déploiement ci‑dessous.
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -16,13 +18,19 @@ jobs:
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_KEY }}
           port: 22
-          # Augmenter le timeout au cas où pip install est long
-          command_timeout: 15m 
+          command_timeout: 15m
           script: |
-            set -e  # Arrête tout en cas d'erreur
-            
+            set -e
             cd ~/live-speech-translation
+
             git pull origin main
+
+            # Tailwind CSS : npm ci + build → génère static/css/tailwind.css
+            npm ci
+            npm run build-css
+
+            # Python + app
             source venv/bin/activate
             pip install -r requirements.txt
+
             pm2 reload traduction-app || pm2 restart traduction-app
