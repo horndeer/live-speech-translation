@@ -46,7 +46,4 @@ Cette commande surveille les changements dans vos fichiers HTML/JS et régénèr
 2. **Avant commit** : Exécuter `npm run build-css` pour générer la version optimisée
 3. **Production** : Utiliser le fichier `tailwind.css` généré
 
-## Déploiement (serveur)
-
-Sur la machine où l’app est déployée (ex. via la GitHub Action), **Node.js et npm doivent être installés** une fois. Après chaque déploiement, le workflow lance `npm ci` puis `npm run build-css`, donc aucun build Tailwind manuel n’est nécessaire. Voir le README principal, section « Déploiement ».
 

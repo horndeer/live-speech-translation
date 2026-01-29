@@ -29,15 +29,5 @@ Installez les requirements, dans un environnement virtuel de préférence et pou
 python app.py
 ```
 
-## Déploiement (CI/CD)
-
-Le dépôt inclut une GitHub Action (`.github/workflows/deploy.yml`) qui déploie sur un serveur SSH à chaque push sur `main`.
-
-**Prérequis sur le serveur :**
-- Python 3, venv, `pip install -r requirements.txt`
-- **Node.js et npm** (pour le build Tailwind → `static/css/tailwind.css`)
-- pm2 pour faire tourner l’app
-
-Le script de deploy exécute : `git pull` → `npm ci` + `npm run build-css` → `pip install -r requirements.txt` → `pm2 reload`. Aucune action manuelle après un push sur `main` si Node et npm sont déjà installés sur la machine.
 
 
