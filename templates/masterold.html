@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Master - Traduction</title>
+    <script src="{{ url_for('static', path='js/vendor/azure-speech-sdk/microsoft.cognitiveservices.speech.sdk.bundle-min.js') }}"></script>
+    <script src="{{ url_for('static', path='js/vendor/socket.io.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/main.css') }}">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+
+    <div class="container">
+        <div id="conversation" class="scroll-area">
+            </div>
+    </div>
+
+
+    <div class="controls">
+        <div class = "central-controls"> 
+            <button class="startstop" id="btnStart" onclick="startRecognition()">▶</button>
+            <button class="startstop" id="btnStop" onclick="stopRecognition()" disabled>⏸</button>
+        <div>
+        <div class="right-controls">
+            <button id="new_conversation" onclick="startNewConversation()">new conversation 
+        <div>
+    </div>
+
+    <script src="{{ url_for('static', path='js/message-manager.js') }}"></script>
+    <script>
+
+        const DEV_MODE = "{{ DEV_MODE|tojson }}";
+        const socket = io();
+
+        // UI Manager
+        const ui = new MessageManager(socket, DEV_MODE);
+
+        // sdk azure
+        let recognizer = null;
+
+        async function getTokenOrRefresh() {
+            try {
+                const response = await fetch('/api/get-token');
+                
+                const data = await response.json();
+        
+                if (!response.ok) {
+                    const errorMessage = data.error || "Erreur inconnue lors de la récupération du token";
+                    throw new Error(errorMessage);
+                }   
+        
+                return {
+                    token: data.token,
+                    region: data.region
+                };
+        
+            } catch (error) {
+                if (DEV_MODE) console.error("Erreur Critique Authentication:", error.message);
+                alert("Impossible de se connecter au service vocal");
+                return null;
+            }
+        }
+
+        // --- Configuration Azure ---
+        async function startRecognition() {
+
+            const authdata = await getTokenOrRefresh();
+            if (!authdata) return;
+
+            const { token, region } = authdata;
+            console.log('authentification réussie pour la région : ' + region);
+
+            // 1. Config de base
+            const speechConfig = SpeechSDK.SpeechTranslationConfig.fromAuthorizationToken(token, region);
+
+            // 2. Cibles (Ce que vous voulez obtenir)
+            speechConfig.addTargetLanguage("fr");
+            speechConfig.addTargetLanguage("es");
+
+            // --- L'ASTUCE EST ICI ---
+
+            speechConfig.speechRecognitionLanguage = "fr-FR";
+
+            speechConfig.setProperty(
+                SpeechSDK.PropertyId.SpeechServiceConnection_AutoDetectSourceLanguages,
+                "fr-FR,es-MX" // Liste des candidats possibles
+            );
+
+            const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
+
+            try {
+                recognizer = new SpeechSDK.TranslationRecognizer(speechConfig, audioConfig);
+
+                // 1. En cours de parole (Interim)
+                recognizer.recognizing = (s, e) => {
+
+                    if (DEV_MODE) console.log("reconnaissance en cours de parole...");
+
+                    const data = {
+                        lang: e.result.language,
+                        fr: (e.result.language.includes("fr") ? e.result.text : e.result.translations.get("fr")),
+                        es: (e.result.language.includes("es") ? e.result.text : e.result.translations.get("es")),
+                        is_final: false,
+                    };
+                    socket.emit('new_translation', data);
+                    ui.addMessage(data);
+                };
+
+                // 2. Phrase terminée (Final)
+                recognizer.recognized = (s, e) => {
+                    if (e.result.reason == SpeechSDK.ResultReason.TranslatedSpeech) {
+                        if (DEV_MODE) console.log("phrase terminée reçus:");
+                        const data = {
+                            lang: e.result.language,
+                            fr: (e.result.language.includes("fr") ? e.result.text : e.result.translations.get("fr")),
+                            es: (e.result.language.includes("es") ? e.result.text : e.result.translations.get("es")),
+                            is_final: true,
+                        };
+                        socket.emit('new_translation', data);
+                        ui.addMessage(data);
+                    }
+                };
+
+                recognizer.canceled = (s, e) => {
+                    if (DEV_MODE) console.error(`CANCELED: Reason=${e.reason}`);
+                    if (e.reason === SpeechSDK.CancellationReason.Error) {
+                        if (DEV_MODE) console.error(`CANCELED: ErrorCode=${e.errorCode}`);
+                        if (DEV_MODE) console.error(`CANCELED: ErrorDetails=${e.errorDetails}`);
+                        if (DEV_MODE) console.error("CANCELED: Avez-vous mis à jour la clé d'abonnement et la région ?");
+                    }
+                };
+
+                recognizer.startContinuousRecognitionAsync();
+
+                // intervalle de renouvellement du token Azure (9 minutes)
+                tokenRefreshInterval = setInterval(async () => {
+                    console.log("🔄 Renouvellement du token Azure en cours...");
+                    
+                    const newData = await getTokenOrRefresh();
+                    
+                    if (newData && newData.token) {
+                        // C'est la méthode magique : on met à jour le token à la volée
+                        recognizer.authorizationToken = newData.token;
+                        console.log("Token renouvelé avec succès sans coupure !");
+                    } else {
+                        console.error("Échec du renouvellement du token");
+                    }
+                    
+                }, 9 * 60 * 1000); // 9 minutes * 60 secondes * 1000 ms
+
+            } catch (error) {
+                if (DEV_MODE) console.error("Erreur Critique de reconnaissance:", error.message);
+                alert("Impossible de démarrer la reconnaissance");
+                return;
+            }
+            
+            document.getElementById('btnStart').disabled = true;
+            document.getElementById('btnStop').disabled = false;
+
+            console.log("reconnaissance démarrée");
+        }
+
+        function stopRecognition() {
+            recognizer.stopContinuousRecognitionAsync();
+            document.getElementById('btnStart').disabled = false;
+            document.getElementById('btnStop').disabled = true;
+
+            if (tokenRefreshInterval) {
+                clearInterval(tokenRefreshInterval);
+                tokenRefreshInterval = null;
+            }
+
+            console.log("reconnaissance arrêtée");
+        }
+
+
+    </script>
+
+</body>
+</html>
