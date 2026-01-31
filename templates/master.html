@@ -131,6 +131,32 @@
         socket.on("update_viewer_count", (count) => {
             document.getElementById('viewer-count').textContent = count;
         });
+
+        // Écouter les commandes à distance de la télécommande
+        socket.on("start_recognition_command", () => {
+            console.log("Commande à distance reçue: démarrer reconnaissance");
+            startRecognition();
+        });
+
+        socket.on("stop_recognition_command", () => {
+            console.log("Commande à distance reçue: arrêter reconnaissance");
+            stopRecognition();
+        });
+
+        // Écouter l'état de reconnaissance (pour synchronisation initiale)
+        socket.on("recognition_state", (state) => {
+            console.log("État de reconnaissance reçu:", state);
+            // Synchroniser l'interface si nécessaire
+            const btnStart = document.getElementById('btnStart');
+            const btnStop = document.getElementById('btnStop');
+            if (state) {
+                btnStart.disabled = true;
+                btnStop.disabled = false;
+            } else {
+                btnStart.disabled = false;
+                btnStop.disabled = true;
+            }
+        });
         
         async function getTokenOrRefresh() {
             try {
@@ -257,6 +283,9 @@
             document.getElementById('btnStart').disabled = true;
             document.getElementById('btnStop').disabled = false;
 
+            // Informer le serveur de l'état (pour synchroniser avec la télécommande)
+            socket.emit('update_recognition_state', true);
+
             console.log("reconnaissance démarrée");
         }
 
@@ -270,6 +299,9 @@
                 clearInterval(tokenRefreshInterval);
                 tokenRefreshInterval = null;
             }
+
+            // Informer le serveur de l'état (pour synchroniser avec la télécommande)
+            socket.emit('update_recognition_state', false);
 
             console.log("reconnaissance arrêtée");
         }

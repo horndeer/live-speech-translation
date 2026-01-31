@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Télécommande - Traduction Live</title>
+    
+    <!-- Tailwind CSS généré -->
+    <link href="{{ url_for('static', path='css/tailwind.css') }}" rel="stylesheet">
+
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="{{ url_for('static', path='js/vendor/socket.io.js') }}"></script>
+</head>
+
+<body class="bg-background text-zinc-100 h-screen w-screen overflow-hidden flex items-center justify-center font-sans">
+
+    <div class="flex flex-col items-center justify-center gap-8 p-8">
+        
+        <!-- Titre -->
+        <div class="text-center mb-4">
+            <h1 class="text-3xl font-bold text-white mb-2">Télécommande</h1>
+            <p class="text-zinc-400 text-sm">Contrôlez la reconnaissance vocale à distance</p>
+        </div>
+
+        <!-- Indicateur de connexion -->
+        <div id="connection-status" class="flex items-center gap-2 px-4 py-2 bg-zinc-900 rounded-full border border-zinc-800">
+            <span class="relative flex h-2.5 w-2.5">
+                <span id="ping-indicator" class="absolute inline-flex h-full w-full rounded-full bg-zinc-500 opacity-0"></span>
+                <span id="status-dot" class="relative inline-flex rounded-full h-2.5 w-2.5 bg-zinc-500"></span>
+            </span>
+            <span id="connection-text" class="text-sm font-mono text-zinc-400">Connexion...</span>
+        </div>
+
+        <!-- État de la reconnaissance -->
+        <div id="recognition-status" class="text-center p-4 rounded-xl bg-zinc-900/50 border border-zinc-800 min-w-[280px]">
+            <p class="text-xs text-zinc-500 mb-2">État de la reconnaissance</p>
+            <p id="recognition-state-text" class="text-lg font-semibold text-zinc-300">Arrêtée</p>
+        </div>
+
+        <!-- Bouton principal Play/Pause -->
+        <div class="relative my-12">
+            <button id="btnToggle" onclick="toggleRecognition()" 
+                    style="width: 180px; height: 180px; font-size: 75px;"
+                    class="rounded-full bg-primary hover:bg-[#02b0eb] text-black flex items-center justify-center shadow-[0_0_40px_rgba(0,191,255,0.4)] hover:shadow-[0_0_60px_rgba(0,191,255,0.6)] hover:scale-105 transition-all disabled:opacity-20 disabled:cursor-not-allowed disabled:shadow-none">
+                <i id="btnIcon" class="ph-fill ph-play"></i>
+            </button>
+        </div>
+
+        <!-- Informations supplémentaires -->
+        <div class="text-center text-xs text-zinc-500 mt-4">
+            <p>Synchronisé avec le Master</p>
+        </div>
+
+    </div>
+
+    <script>
+        const socket = io();
+        let isRecognizing = false;
+        let isConnected = false;
+
+        // Éléments DOM
+        const btnToggle = document.getElementById('btnToggle');
+        const btnIcon = document.getElementById('btnIcon');
+        const statusDot = document.getElementById('status-dot');
+        const pingIndicator = document.getElementById('ping-indicator');
+        const connectionText = document.getElementById('connection-text');
+        const recognitionStateText = document.getElementById('recognition-state-text');
+
+        // Connexion établie
+        socket.on('connect', () => {
+            console.log('Télécommande connectée');
+            isConnected = true;
+            updateConnectionStatus();
+        });
+
+        // Déconnexion
+        socket.on('disconnect', () => {
+            console.log('Télécommande déconnectée');
+            isConnected = false;
+            updateConnectionStatus();
+        });
+
+        // Réception de l'état de reconnaissance depuis le serveur
+        socket.on('recognition_state', (state) => {
+            console.log('État de reconnaissance reçu:', state);
+            isRecognizing = state;
+            updateButtonState();
+        });
+
+        // Fonction pour basculer la reconnaissance
+        function toggleRecognition() {
+            if (!isConnected) {
+                alert('Télécommande non connectée au serveur');
+                return;
+            }
+
+            if (isRecognizing) {
+                console.log('Envoi commande: arrêt reconnaissance');
+                socket.emit('remote_stop_recognition');
+            } else {
+                console.log('Envoi commande: démarrage reconnaissance');
+                socket.emit('remote_start_recognition');
+            }
+        }
+
+        // Mise à jour de l'état du bouton
+        function updateButtonState() {
+            if (isRecognizing) {
+                // État: Reconnaissance en cours (afficher pause)
+                btnIcon.className = 'ph-fill ph-pause';
+                btnToggle.classList.add('bg-red-500', 'hover:bg-red-600');
+                btnToggle.classList.remove('bg-primary', 'hover:bg-[#02b0eb]');
+                btnToggle.classList.add('shadow-[0_0_40px_rgba(239,68,68,0.4)]', 'hover:shadow-[0_0_60px_rgba(239,68,68,0.6)]');
+                btnToggle.classList.remove('shadow-[0_0_40px_rgba(0,191,255,0.4)]', 'hover:shadow-[0_0_60px_rgba(0,191,255,0.6)]');
+                recognitionStateText.textContent = 'En cours';
+                recognitionStateText.classList.add('text-primary');
+            } else {
+                // État: Reconnaissance arrêtée (afficher play)
+                btnIcon.className = 'ph-fill ph-play';
+                btnToggle.classList.remove('bg-red-500', 'hover:bg-red-600');
+                btnToggle.classList.add('bg-primary', 'hover:bg-[#02b0eb]');
+                btnToggle.classList.remove('shadow-[0_0_40px_rgba(239,68,68,0.4)]', 'hover:shadow-[0_0_60px_rgba(239,68,68,0.6)]');
+                btnToggle.classList.add('shadow-[0_0_40px_rgba(0,191,255,0.4)]', 'hover:shadow-[0_0_60px_rgba(0,191,255,0.6)]');
+                recognitionStateText.textContent = 'Arrêtée';
+                recognitionStateText.classList.remove('text-primary');
+            }
+        }
+
+        // Mise à jour du statut de connexion
+        function updateConnectionStatus() {
+            if (isConnected) {
+                statusDot.classList.remove('bg-zinc-500');
+                statusDot.classList.add('bg-green-500');
+                pingIndicator.classList.remove('bg-zinc-500', 'opacity-0');
+                pingIndicator.classList.add('bg-green-400', 'opacity-75', 'animate-ping');
+                connectionText.textContent = 'Connecté';
+                connectionText.classList.remove('text-zinc-400');
+                connectionText.classList.add('text-green-400');
+                btnToggle.disabled = false;
+            } else {
+                statusDot.classList.remove('bg-green-500');
+                statusDot.classList.add('bg-zinc-500');
+                pingIndicator.classList.remove('bg-green-400', 'opacity-75', 'animate-ping');
+                pingIndicator.classList.add('bg-zinc-500', 'opacity-0');
+                connectionText.textContent = 'Déconnecté';
+                connectionText.classList.remove('text-green-400');
+                connectionText.classList.add('text-zinc-400');
+                btnToggle.disabled = true;
+            }
+        }
+
+        // Initialisation
+        updateButtonState();
+        updateConnectionStatus();
+    </script>
+
+</body>
+</html>
+

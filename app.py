@@ -180,6 +180,12 @@ async def viewer(request: Request):
     return templates.TemplateResponse("viewer.html", {"request": request})
 
 
+@app.get("/control")
+async def control(request: Request):
+    """Page de télécommande pour contrôler la reconnaissance à distance"""
+    return templates.TemplateResponse("control.html", {"request": request})
+
+
 @app.get("/login")
 async def login_page(request: Request):
     """Page de connexion"""
@@ -356,6 +362,8 @@ async def sync_socket_count_endpoint():
 sid_registry = {
     "master": None,
     "viewer_count": 0,
+    "control": None,
+    "recognition_state": False,  # État de la reconnaissance (true = en cours)
 }
 
 
@@ -369,6 +377,8 @@ async def connect(sid, environ):
         client_type = "master"
     elif "/viewer" in referer:
         client_type = "viewer"
+    elif "/control" in referer:
+        client_type = "control"
     else:
         client_type = "unknown"
 
@@ -377,8 +387,14 @@ async def connect(sid, environ):
     # Enregistrer le type de client (vous avez déjà sid_registry)
     if client_type == "master":
         sid_registry["master"] = sid
+        # Envoyer l'état actuel au master
+        await sio.emit("recognition_state", sid_registry["recognition_state"], to=sid)
     elif client_type == "viewer":
         sid_registry["viewer_count"] += 1
+    elif client_type == "control":
+        sid_registry["control"] = sid
+        # Envoyer l'état actuel au control
+        await sio.emit("recognition_state", sid_registry["recognition_state"], to=sid)
 
     await sio.emit("load_history", history, to=sid)
 
@@ -396,6 +412,8 @@ async def disconnect(sid):
     try:
         if sid == sid_registry.get("master"):
             sid_registry["master"] = None
+        elif sid == sid_registry.get("control"):
+            sid_registry["control"] = None
         else:
             # Décrémenter le compteur de viewers
             sid_registry["viewer_count"] = max(
@@ -485,6 +503,58 @@ async def new_translation(sid, data):
             )
         except Exception as e:
             logger.error(f"Erreur lors de la sauvegarde: {e}")
+
+
+@sio.event
+async def remote_start_recognition(sid):
+    """Commande à distance pour démarrer la reconnaissance"""
+    global sid_registry
+    logger.info(f"Commande remote_start_recognition reçue de {sid}")
+    
+    # Mettre à jour l'état
+    sid_registry["recognition_state"] = True
+    
+    # Envoyer la commande au master
+    if sid_registry.get("master"):
+        await sio.emit("start_recognition_command", to=sid_registry["master"])
+        logger.info(f"Commande envoyée au master: {sid_registry['master']}")
+    
+    # Synchroniser l'état avec le control
+    if sid_registry.get("control"):
+        await sio.emit("recognition_state", True, to=sid_registry["control"])
+
+
+@sio.event
+async def remote_stop_recognition(sid):
+    """Commande à distance pour arrêter la reconnaissance"""
+    global sid_registry
+    logger.info(f"Commande remote_stop_recognition reçue de {sid}")
+    
+    # Mettre à jour l'état
+    sid_registry["recognition_state"] = False
+    
+    # Envoyer la commande au master
+    if sid_registry.get("master"):
+        await sio.emit("stop_recognition_command", to=sid_registry["master"])
+        logger.info(f"Commande envoyée au master: {sid_registry['master']}")
+    
+    # Synchroniser l'état avec le control
+    if sid_registry.get("control"):
+        await sio.emit("recognition_state", False, to=sid_registry["control"])
+
+
+@sio.event
+async def update_recognition_state(sid, state):
+    """Le master informe le serveur de son état de reconnaissance"""
+    global sid_registry
+    logger.info(f"État de reconnaissance mis à jour: {state}")
+    
+    # Mettre à jour l'état global
+    sid_registry["recognition_state"] = state
+    
+    # Synchroniser avec le control si connecté
+    if sid_registry.get("control"):
+        await sio.emit("recognition_state", state, to=sid_registry["control"])
 
 
 # Pour lancer le serveur :
