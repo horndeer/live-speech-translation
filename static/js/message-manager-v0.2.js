@@ -50,13 +50,13 @@ class MessageManager {
                 <div class="text-xs text-zinc-500 mb-1 flex items-center gap-2 select-none min-h-[1.25rem]">
                     <span class="font-bold text-zinc-600">${isFr ? time : '&nbsp;'}</span>
                 </div>
-                <p class="text-xl md:text-2xl font-light text-white leading-relaxed break-words">${data.fr}</p>
+                <p class="text-xl md:text-2xl font-normal text-white leading-relaxed break-words">${data.fr}</p>
             </div>
             <div class="pl-2 py-2 self-stretch">
                 <div class="text-xs text-zinc-500 mb-1 flex items-center gap-2 select-none min-h-[1.25rem]">
                     <span class="font-bold text-zinc-600">${isEs ? time : '&nbsp;'}</span>
                 </div>
-                <p class="text-xl md:text-2xl font-light text-accent leading-relaxed break-words">${data.es}</p>
+                <p class="text-xl md:text-2xl font-normal text-accent leading-relaxed break-words">${data.es}</p>
             </div>
         `;
     }
